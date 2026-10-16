@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Мини-чат: RAG и память задачи</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1360px; margin: 20px auto; padding: 0 16px;
+           color:#111827; background:#fff; }
+    h1 { margin-bottom: 2px; font-size: 1.4rem; }
+    h2 { font-size: 1.02rem; margin: 0 0 8px; }
+    a { color:#2563eb; }
+    .idea { color:#4b5563; font-size:.86rem; margin-top:2px; line-height:1.45; }
+    .карточка { border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; margin:12px 0; background:#fff; }
+    .ряд { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    label { display:flex; flex-direction:column; font-size:.78rem; color:#374151; gap:3px; }
+    label.флажок { flex-direction:row; align-items:center; gap:5px; }
+    input, select, textarea { padding:6px 9px; font-size:.9rem; border:1px solid #d1d5db; border-radius:6px;
+                              font-family:inherit; }
+    button { padding:7px 14px; font-size:.9rem; border:1px solid #9ca3af; border-radius:6px;
+             background:#f9fafb; cursor:pointer; }
+    button.главная { background:#2563eb; color:#fff; border-color:#1d4ed8; }
+    button:disabled { opacity:.5; cursor:default; }
+    .мета { color:#6b7280; font-size:.78rem; }
+    code { font-size:.76rem; background:#f3f4f6; padding:1px 4px; border-radius:3px; }
+    table { border-collapse:collapse; width:100%; font-size:.8rem; }
+    th, td { border-bottom:1px solid #e5e7eb; padding:5px 7px; text-align:left; vertical-align:top; }
+    th { background:#f9fafb; font-weight:600; }
+    td.ч { text-align:right; font-variant-numeric: tabular-nums; }
+    .ошибка { background:#fde8e8; color:#9b1c1c; padding:6px 10px; border-radius:6px; font-size:.84rem; }
+    details summary { cursor:pointer; font-weight:600; font-size:.9rem; }
+    .справка { font-size:.84rem; line-height:1.5; color:#374151; }
+    .макет { display:grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap:14px; align-items:start; }
+    @media (max-width: 960px) { .макет { grid-template-columns: 1fr; } }
+    #чат-лента { max-height: 640px; overflow-y:auto; padding-right:4px; }
+    .сообщение { border-radius:8px; padding:8px 11px; margin:8px 0; font-size:.9rem; line-height:1.48; }
+    .сообщение.пользователь { background:#eff6ff; border:1px solid #bfdbfe; margin-left:12%; }
+    .сообщение.ассистент { background:#fff; border:1px solid #e5e7eb; border-left:4px solid #059669; margin-right:4%; }
+    .сообщение.ассистент.разговор { border-left-color:#7c3aed; }
+    .сообщение.ассистент.не-знаю { border-left-color:#d97706; background:#fffbeb; }
+    .сообщение .кто { font-size:.74rem; color:#6b7280; margin-bottom:3px; }
+    .сообщение .текст { white-space:pre-wrap; }
+    .понято { font-size:.76rem; color:#4b5563; background:#f9fafb; border-radius:5px; padding:3px 7px; margin:4px 0; }
+    .чип { display:inline-block; font-size:.74rem; border-radius:10px; padding:1px 8px; margin:2px 4px 2px 0;
+           background:#ede9fe; color:#5b21b6; }
+    .источники { margin-top:6px; border-top:1px dashed #d1d5db; padding-top:5px; font-size:.8rem; }
+    .источники .заголовок { font-weight:600; font-size:.76rem; color:#374151; }
+    .источник { margin:3px 0; }
+    .источник .паспорт { color:#111827; }
+    .цитата { margin:2px 0 2px 14px; color:#065f46; font-size:.78rem; }
+    .вызов { margin:2px 0 2px 14px; font-size:.78rem; }
+    .сообщение.помощь { border-left:3px solid #6366f1; }
+    .справка-помощи { white-space:pre-wrap; font-size:.8rem; margin:4px 0; }
+    .проверено { color:#92400e; }
+    .код { display:inline-block; min-width:26px; font-weight:700; color:#5b21b6; }
+    .строка-цели { margin-top:6px; font-size:.75rem; color:#374151; background:#f0fdf4; border-radius:5px; padding:3px 7px; }
+    .предупреждение { color:#b45309; font-size:.76rem; }
+    .ввод { display:flex; gap:8px; margin-top:8px; }
+    .ввод textarea { flex:1; min-height:52px; resize:vertical; }
+    .память-блок { margin:8px 0; }
+    .память-блок h3 { font-size:.82rem; margin:0 0 4px; color:#374151; }
+    .запись { font-size:.82rem; margin:3px 0; line-height:1.4; }
+    .запись.свежая { background:#fef9c3; border-radius:4px; }
+    .реплика-номер { color:#6b7280; font-size:.74rem; }
+    .цель-текст { font-size:.92rem; font-weight:600; color:#065f46; }
+    .ход { height:10px; background:#e5e7eb; border-radius:5px; overflow:hidden; margin:6px 0 2px; }
+    .ход > div { height:100%; background:#2563eb; width:0; transition: width .3s; }
+    .ок { color:#047857; } .нет { color:#b91c1c; }
+    .этапы { font-size:.76rem; color:#374151; margin-top:3px; }
+    .этапы .этап { display:inline-block; margin-right:6px; }
+    .этапы .локально { color:#047857; font-weight:600; }
+    #чат-ход .идёт { color:#1d4ed8; font-weight:600; }
+    #чат-ход .этап-строка { margin:2px 0; }
+  </style>
+</head>
+<body>
+  <h1>Мини-чат по документам: RAG + память задачи · /help — ассистент разработчика · /review — AI-ревью</h1>
+  {% include "_offline.html" %}
+  <div class="мета"><a href="/">← главная</a> · <a href="/rag">локальный RAG и сравнение с облаком</a> ·
+    модель ответов по умолчанию <code>{{ rag_model }}</code></div>
+  <p class="idea" id="день-32">
+    <b>День 32 — AI-ревью кода.</b> <code>/review</code> — ревью своей ветки против main, <code>/review база...голова</code> —
+    любого диапазона, как PR: diff и изменённые файлы — через git-сервер MCP, опора — документация и код базы (RAG),
+    три ревьюера параллельно — потенциальные баги, архитектурные проблемы, рекомендации; находки проверяет код
+    (файл из PR, строка в изменённом участке, цитата diff). Тот же конвейер на каждый PR запускает GitHub Actions
+    и пишет комментарий в PR.
+  </p>
+  <p class="idea" id="неделя-6">
+    <b>День 31 — ассистент разработчика.</b> <code>/help вопрос</code> отвечает о проекте CRM (только чтение)
+    по его документации — README, docs, specs, схемы данных <code>models.py</code> и маршруты <code>urls.py</code> — и по
+    git через свой MCP-сервер только на чтение: ветка и статус — всегда, список файлов, diff, журнал и файл из
+    коммита — когда спрашивают. <code>/help</code> без вопроса — справка.<br>
+    <b>Неделя 6 — локальная модель.</b> Чат хранит <b>историю диалога</b> и на <b>каждой реплике ищет</b>
+    контекст в базе документов: отдельный вызов модели разбирает реплику — превращает «а у них?» в
+    самостоятельный вопрос и вынимает новое для <b>памяти задачи</b> (цель, уточнения, ограничения,
+    термины), — потом идёт поиск и ответ с <b>источниками и дословными цитатами</b>, которые проверяет код.
+    Ответа без источников не бывает: вопрос о самом разговоре отвечается по памяти задачи с её записями.
+    С переключателем «🔒 офлайн» чат работает целиком на этой машине: разбор реплики — qwen3:1.7b по
+    JSON-схеме, поиск — bge-m3 и кросс-энкодер на CPU, ответ — qwen3.5:4b; реплика идёт минуты, поэтому
+    под полем ввода виден ход по этапам и счётчик токенов. Сравнение локального RAG с облаком на наборе
+    вопросов — на странице <a href="/rag">RAG</a>.
+  </p>
+
+  <div class="макет">
+    <div>
+      <div class="карточка">
+        <div class="ряд">
+          <label>Сессия
+            <input id="чат-сессия" value="основная" list="чат-сессии" style="width:220px">
+            <datalist id="чат-сессии"></datalist>
+          </label>
+          <button id="чат-открыть">Открыть</button>
+          <button id="чат-новый" title="стереть историю и память задачи этой сессии">Новый разговор</button>
+          <label>Модель ответов
+            <select id="чат-модель">
+              <option value="">по роли ({{ rag_model }})</option>
+              {% for м in models %}<option value="{{ м.key }}" data-local="{{ 1 if м.local else 0 }}" data-nokey="{{ 1 if (not м.available and not м.offline_blocked and not м.local) else 0 }}" {% if not м.available %}disabled{% endif %}>{{ м.label }}{% if not м.available and not м.offline_blocked %} ({{ "не скачана" if м.local else "нет ключа" }}){% endif %}</option>{% endfor %}
+            </select>
+          </label>
+          <span class="мета" id="чат-сводка"></span>
+        </div>
+        <div id="чат-лента"></div>
+        <div class="ввод">
+          <textarea id="чат-реплика" placeholder="Например: Мне нужно сравнить договоры связи Ростелеком VPN и ВымпелКом. Начнём: до какого числа платить Ростелекому?"></textarea>
+          <button class="главная" id="чат-отправить">Отправить</button>
+        </div>
+        <div class="мета" id="подсказка-помощи">Ассистент разработчика (День 31): <code>/help вопрос</code> — о проекте CRM:
+          документация, схемы данных, API и git (только чтение); <code>/help</code> — команды чата;
+          <code>/review</code> — AI-ревью ветки (День 32).</div>
+        <div class="мета" id="чат-ход"></div>
+      </div>
+    </div>
+    <div>
+      <div class="карточка" id="память-задачи-карточка">
+        <h2>Память задачи</h2>
+        <div id="память-задачи"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="карточка" id="сценарии-карточка">
+    <h2>Длинные сценарии <span class="мета">два разговора по 13–14 реплик из chat-scenarios.json</span></h2>
+    <div class="ряд">
+      <label>Сценарии
+        <select id="сценарии-выбор">
+          <option value="">оба</option>
+          <option value="s1">s1 — сравнение двух договоров связи</option>
+          <option value="s2">s2 — расходы на программы в бюджете ИТ</option>
+        </select>
+      </label>
+      <label class="флажок"><input type="checkbox" id="сценарии-судья" checked> судья в конце</label>
+      <button class="главная" id="сценарии-запустить">Прогнать сценарии</button>
+      <span class="мета">на каждой реплике: источники, факты, нужный документ, память задачи, цель на месте; результат — и в CHAT-SCENARIOS.md</span>
+    </div>
+    <div id="сценарии-ход"></div>
+    <div id="сценарии"></div>
+  </div>
+
+  <details class="карточка">
+    <summary>❓ Справка по форме</summary>
+    <div class="справка">
+      <p><b>Сессия.</b> У каждой сессии своя история и своя память задачи (файл
+        <code>memory/chat/chat-&lt;имя латиницей&gt;.json</code>). «Открыть» — перейти к сессии,
+        «Новый разговор» — стереть историю и память задачи этой сессии. «Модель ответов» — модель для
+        ответа; разбор реплики идёт моделью роли «разбор-реплики».</p>
+      <p><b>Реплика.</b> Enter — отправить, Shift+Enter — новая строка. Над ответом серая строка
+        «понято»: вид реплики (<i>документы</i> — ответ по документам с цитатами; <i>разговор</i> —
+        ответ по памяти задачи), самостоятельный вопрос, по которому шёл поиск, подвопросы (если
+        вопрос о нескольких договорах сразу) и что добавилось в память задачи.</p>
+      <p><b>Источники.</b> У ответа по документам — файл, раздел, пункт, страницы и
+        <code>chunk_id</code>, под ними дословные цитаты с отметкой проверки кодом. У «не знаю» —
+        разделы, которые проверены и почему ответа в них нет. У ответа по памяти — коды записей
+        (Ц — цель, У — уточнение, О — ограничение, Т — термин, В — выяснено) и документы записей «В».
+        Зелёная строка под ответом — цель и сколько всего в памяти задачи после этого хода.</p>
+      <p><b>Память задачи.</b> Справа — цель (меняется только явной сменой, прежняя сохраняется),
+        уточнения, ограничения, термины и «выяснено» — ответы с подтверждёнными цитатами. У каждой
+        записи номер реплики, из которой она взята; записи последнего хода подсвечены.</p>
+      <p><b>Длинные сценарии.</b> Каждый сценарий идёт в своей сессии с чистого листа. На каждой
+        реплике код проверяет: есть ли источники, верно ли понят вид, есть ли нужный документ с
+        цитатой и ожидаемые факты, записалось ли уточнение или ограничение, на месте ли цель. В
+        конце судья читает весь разговор: удержана ли цель, соблюдены ли ограничения.</p>
+    </div>
+  </details>
+
+<script>
+let состояние = null;
+let опрос = null;
+let последний_ход = 0;
+
+function экранировать(т) {
+  return String(т ?? '').replace(/[&<>"']/g, с => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[с]));
+}
+function число(n) { return Number(n || 0).toLocaleString('ru-RU'); }
+
+async function запрос(путь, тело) {
+  const ответ = await fetch(путь, тело === undefined ? {} : {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(тело)});
+  const данные = await ответ.json().catch(() => ({error: 'сервер ответил не JSON'}));
+  if (!ответ.ok) throw new Error(данные.error || ответ.statusText);
+  return данные;
+}
+
+function сессия() { return document.getElementById('чат-сессия').value.trim() || 'основная'; }
+
+async function обновить() {
+  try {
+    состояние = await запрос('/api/chat?session=' + encodeURIComponent(сессия()));
+  } catch (e) {
+    document.getElementById('чат-лента').innerHTML = `<div class="ошибка">${экранировать(e.message)}</div>`;
+    return;
+  }
+  нарисовать();
+  const идёт = состояние.работа && !состояние.работа.готово;
+  if (идёт && !опрос) опрос = setInterval(обновить, 1500);
+  if (!идёт && опрос) { clearInterval(опрос); опрос = null; }
+}
+
+function нарисовать() {
+  document.getElementById('чат-сессии').innerHTML = (состояние.сессии || [])
+    .map(с => `<option value="${экранировать(с.сессия)}">`).join('');
+  нарисоватьЛенту();
+  нарисоватьПамять();
+  нарисоватьСценарии();
+}
+
+function паспорт(и) {
+  const части = [и.source, и.section];
+  if (и.clause) части.push('п. ' + и.clause);
+  if (и.pages) части.push('стр. ' + и.pages);
+  return части.filter(Boolean).map(экранировать).join(' · ') + (и.chunk_id ? ` · <code>${экранировать(и.chunk_id)}</code>` : '');
+}
+
+const ОТМЕТКИ = {'дословно': '✓ дословно', 'почти': '≈ почти', 'в другом фрагменте': '↪ в другом фрагменте'};
+
+function источникиHTML(х) {
+  const документы = х.sources.filter(и => и.вид === 'документ');
+  const проверено = х.sources.filter(и => и.вид === 'проверено');
+  const память = х.sources.filter(и => и.вид === 'память');
+  let html = '';
+  if (документы.length) {
+    html += '<div class="заголовок">Источники</div>' + документы.map(и =>
+      `<div class="источник документ"><span class="паспорт">[${и.n}] ${паспорт(и)}</span>` +
+      (и.цитаты || []).map(ц => `<div class="цитата">${экранировать(ОТМЕТКИ[ц.проверка] || ц.проверка)} «${экранировать(ц.текст)}»</div>`).join('') +
+      '</div>').join('');
+  }
+  if (проверено.length) {
+    html += '<div class="заголовок">Источники: подтверждённого ответа нет — проверены разделы</div>' + проверено.map(и =>
+      `<div class="источник проверено">· ${паспорт(и)}${и.rerank != null ? ` <span class="мета">(оценка ${Number(и.rerank).toFixed(2)})</span>` : ''}</div>`).join('');
+  }
+  if (память.length) {
+    html += '<div class="заголовок">Источники — память задачи</div>' + память.map(и =>
+      `<div class="источник память"><span class="код">${экранировать(и.код || '—')}</span> ${экранировать(и.что)}
+        <span class="реплика-номер">(реплика ${и.реплика})</span>: ${экранировать(String(и.текст || '').slice(0, 220))}` +
+      (и.документы || []).map(д => `<div class="цитата">→ ${паспорт(д)}</div>`).join('') + '</div>').join('');
+  }
+  return `<div class="источники" data-источников="${х.sources.length}">${html || '<span class="нет">источников нет</span>'}</div>`;
+}
+
+function измененияHTML(изм) {
+  const чипы = [];
+  if (изм.цель) чипы.push(`+ цель «${экранировать(изм.цель)}»`);
+  for (const [ключ, подпись] of [['уточнения', 'уточнение'], ['ограничения', 'ограничение'], ['термины', 'термин']])
+    for (const т of (изм[ключ] || [])) чипы.push(`+ ${подпись} «${экранировать(т)}»`);
+  if (изм.смена_цели) чипы.push('цель сменена');
+  return чипы.map(ч => `<span class="чип">${ч}</span>`).join('');
+}
+
+function ходHTML(х) {
+  const вид = х.kind || (х.parse && х.parse.kind) || '';
+  const вопрос = х.search_question || (х.parse && х.parse.search_question) || '';
+  const подвопросы = (х.parse && х.parse.subquestions) || х.subquestions || [];
+  const изм = х.memory_changes || {};
+  const классы = 'сообщение ассистент' + (вид === 'разговор' ? ' разговор' : '') + (х.abstain ? ' не-знаю' : '');
+  const найдено = вид !== 'разговор' ? '' : (х.found || []).length
+    ? `<div class="мета">В документах по теме (поиск на этой реплике, в ответ не вошло): ${х.found.map(паспорт).join('; ')}</div>`
+    : (х.candidates ? `<div class="мета">В документах по теме: близкого не нашлось (поиск проверил ${х.candidates} кандидатов)</div>` : '');
+  const нарушения = (х.violations || []).map(н => `<div class="предупреждение">⚠ ${экранировать(н)}</div>`).join('');
+  const сводка = х.memory || {};
+  return `<div class="сообщение пользователь" data-номер="${х.turn}"><div class="кто">Вы · реплика ${х.turn}</div>
+      <div class="текст">${экранировать(х.message)}</div></div>
+    <div class="${классы}" data-номер="${х.turn}" data-вид="${экранировать(вид)}" data-не-знаю="${х.abstain ? 1 : 0}">
+      <div class="понято">понято: <b>${экранировать(вид)}</b> · искали: «${экранировать(вопрос)}»` +
+      подвопросы.map(п => `<br>подвопрос: «${экранировать(п)}»`).join('') +
+      ((х.parse || {}).fixes || х.parse_fixes || []).map(п => `<br><span class="предупреждение">поправка кода: ${экранировать(п)}</span>`).join('') +
+      ((х.parse_error || (х.parse || {}).error) ? `<br><span class="предупреждение">${экранировать(String(х.parse_error || х.parse.error).includes('искали')
+        ? (х.parse_error || х.parse.error) : 'разбор не удался — искали по реплике и цели')}</span>` : '') +
+      `${измененияHTML(изм) ? '<br>' + измененияHTML(изм) : ''}</div>
+      <div class="текст">${экранировать(х.text)}</div>
+      ${источникиHTML(х)}${найдено}${нарушения}
+      ${х.abstain ? `<div class="мета">«Не знаю» — решил: ${экранировать(х.abstain_by)}</div>` : ''}
+      <div class="строка-цели">Цель: ${экранировать(х.goal || 'ещё не названа')}${сводка.выяснено != null ?
+        ` · уточнений ${сводка.уточнений} · ограничений ${сводка.ограничений} · терминов ${сводка.терминов} · выяснено ${сводка.выяснено}` : ''}</div>
+      <div class="мета">${экранировать(х.model || '')}${моделиЛокальны(х) ? ' · <span class="ок">локально</span>' : ''} · вызовов ${х.calls} · вход ${число(х.tokens_in)} ток. · ${Number(х.seconds || 0).toFixed(1)} с${х.repaired ? ' · был повторный запрос' : ''}</div>
+      ${этапыHTML(х.stages)}
+    </div>`;
+}
+
+// Ход по этапам (День 27): разбор → поиск → ответ, с моделью, секундами, токенами.
+function моделиЛокальны(х) {
+  const э = (х.stages || []).filter(с => с.модель);
+  return э.length > 0 && э.every(с => с.локально);
+}
+function этапHTML(э) {
+  if (э.этап === 'поиск')
+    return `поиск${э.реранкер ? ` · ${экранировать(э.реранкер)} ${э.k_до}→${э.k_после}` : ''}${э.подвопросов ? ` · подвопросов ${э.подвопросов}` : ''} · ${э.секунд ?? '…'} с`;
+  if (!э.модель && э.подпись) return `${экранировать(э.этап)} · ${экранировать(э.подпись)} · ${э.секунд ?? '…'} с`;
+  return `${экранировать(э.этап)} · <span class="${э.локально ? 'локально' : ''}">${экранировать(э.модель || '')}${э.локально ? ' (локально)' : ''}</span>` +
+    ` · ${э.секунд ?? '…'} с${э.вход != null ? ` · вход ${э.вход} / выход ${э.выход} ток.` : ''}`;
+}
+function этапыHTML(этапы) {
+  if (!этапы || !этапы.length) return '';
+  return `<div class="этапы">Этапы: ${этапы.map(э => `<span class="этап" data-этап="${экранировать(э.этап)}">${этапHTML(э)}</span>`).join(' → ')}</div>`;
+}
+
+// День 31: ответ ассистента разработчика (/help) — карточка после хода, за которым его задали.
+function помощьHTML(п) {
+  const git = п.git || {};
+  const ветка = git.branch ? `ветка <b>${экранировать(git.branch)}</b> @ <code>${экранировать(git.commit)}</code>` +
+    (git.clean ? ' · рабочий каталог чист' : ` · изменено ${git.changed}`) : '<span class="предупреждение">git недоступен</span>';
+  const цитаты = (п.quotes || []).filter(ц => ц.confirmed);
+  const источники = (п.sources || []).map(и => `<div class="источник документ"><span class="паспорт">[${и.n}] ${паспорт(и)}</span>` +
+    цитаты.filter(ц => (ц.found_in || ц.n) === и.n).slice(0, 2).map(ц =>
+      `<div class="цитата">${экранировать(ОТМЕТКИ[ц.check] || ц.check)} «${экранировать(ц.text)}»</div>`).join('') + '</div>').join('');
+  const вызовы = (п.tool_calls || []).filter((в, i) => !(git.branch && i < 2)).map(в =>
+    `<div class="вызов" data-инструмент="${экранировать(в.name)}">${в.ok ? '✓' : '✗'} <code>${экранировать(в.name.split('__').pop())}(${
+      экранировать(Object.entries(в.args || {}).map(([к, з]) => `${к}=${з}`).join(', '))})</code> → ${экранировать(в.summary)}</div>`).join('');
+  const пометки = (п.notes || []).map(н => `<div class="предупреждение">⚠ ${экранировать(н)}</div>`).join('');
+  const т = п.timings || {};
+  return `<div class="сообщение пользователь помощь-вопрос"><div class="кто">Вы · /help</div>
+      <div class="текст">/help ${экранировать(п.question)}</div></div>
+    <div class="сообщение ассистент помощь${п.abstain ? ' не-знаю' : ''}" data-помощь="1" data-не-знаю="${п.abstain ? 1 : 0}">
+      <div class="понято">ассистент разработчика · проект «${экранировать(п.project)}» · ${ветка}</div>
+      <div class="текст">${экранировать(п.answer)}</div>
+      ${источники ? `<div class="источники"><div class="заголовок">Источники — документация проекта</div>${источники}</div>` : ''}
+      ${вызовы ? `<div class="источники"><div class="заголовок">Вызовы git (MCP, только чтение)</div>${вызовы}</div>` : ''}
+      ${пометки}
+      <div class="мета">${экранировать(п.model || '')} · вход ${число((п.usage || {}).prompt_tokens)} ток. · git ${Number(т.git || 0).toFixed(1)} с · поиск ${
+        Number(т['поиск'] || 0).toFixed(1)} с · модель ${Number(т['модель'] || 0).toFixed(1)} с · всего ${Number(т['всего'] || 0).toFixed(1)} с</div>
+    </div>`;
+}
+
+// День 32: AI-ревью ветки (/review) — карточка: вердикт, три раздела, находки с файлом и строкой.
+const РАЗДЕЛЫ_РЕВЬЮ = {'баги': '🐞 Потенциальные баги', 'архитектура': '🏛 Архитектурные проблемы', 'рекомендации': '💡 Рекомендации'};
+function ревьюHTML(р) {
+  const вердикт = {'красный': '🔴 есть критичные находки', 'зелёный': '🟢 критичных находок нет',
+                   'не выполнено': '⚠️ ревью не выполнено — нужен человек'}[р['вердикт']] || р['вердикт'];
+  const опора = Object.fromEntries((р['опора'] || []).map(ф => [ф['номер'], ф]));
+  const разделы = Object.entries(РАЗДЕЛЫ_РЕВЬЮ).map(([раздел, заголовок]) => {
+    const находки = (р['находки'] || []).filter(н => н['раздел'] === раздел);
+    const сбой = (р['ревьюеры'] || []).find(в => в['раздел'] === раздел && !в['ок']);
+    const список = сбой ? `<div class="предупреждение">раздел не выполнен: ${экранировать(сбой['ошибка'])}</div>`
+      : находки.length ? находки.map(н => `<div class="находка" data-раздел="${экранировать(раздел)}" data-серьёзность="${экранировать(н['серьёзность'])}">
+          <b>${экранировать(н['серьёзность'])}</b> · <code>${экранировать(н['файл'])}${н['строка'] ? ':' + н['строка'] : ''}</code> — ${экранировать(н['суть'])}
+          ${н['почему'] ? `<div class="мета">почему: ${экранировать(н['почему'])}</div>` : ''}
+          ${н['фрагмент_diff'] ? `<div class="цитата">${н['подтверждена'] ? '✓' : '?'} ${экранировать(н['фрагмент_diff'])}</div>` : ''}
+          ${(н['источники'] || []).length ? `<div class="мета">опора: ${(н['источники'] || []).map(и => опора[и] ?
+              `[${и}] ${экранировать(опора[и]['подпись'])}` : `[${и}]`).join('; ')}</div>` : ''}
+          ${(н['пометки'] || []).map(п => `<div class="мета">⚠ ${экранировать(п)}</div>`).join('')}</div>`).join('')
+      : '<div class="мета">не найдено</div>';
+    return `<div class="источники"><div class="заголовок">${заголовок} (${находки.length})</div>${список}</div>`;
+  }).join('');
+  const пропущены = (р['файлы'] || []).filter(ф => ф['пропущен']);
+  const м = р['метрики'] || {};
+  return `<div class="сообщение пользователь помощь-вопрос"><div class="кто">Вы · /review</div>
+      <div class="текст">/review ${экранировать(р['диапазон'])}</div></div>
+    <div class="сообщение ассистент помощь ревью" data-ревью="1" data-вердикт="${экранировать(р['вердикт'])}">
+      <div class="понято">AI-ревью ${экранировать(р['диапазон'])} · база <code>${экранировать(р['база'])}</code> → голова <code>${экранировать(р['голова'])}</code></div>
+      <div class="текст"><b>${вердикт}</b> — ${экранировать(р['причина'])}</div>
+      ${разделы}
+      ${пропущены.length ? `<div class="мета">не просмотрены: ${пропущены.map(ф => `${экранировать(ф['путь'])} — ${экранировать(ф['пропущен'])}`).join('; ')}</div>` : ''}
+      ${(р['тревоги'] || []).map(т => `<div class="предупреждение">📈 ${экранировать(т)}</div>`).join('')}
+      <div class="мета">${экранировать(м['модель'] || '')} · ${Number(м['секунд'] || 0).toFixed(0)} с · ${число(м['токены'])} ток. · $${Number(м['стоимость'] || 0).toFixed(4)} ·
+        опора ${(р['опора'] || []).length} фрагментов · три ревьюера параллельно, находки проверены кодом</div>
+    </div>`;
+}
+
+function нарисоватьЛенту() {
+  const лента = document.getElementById('чат-лента');
+  const ходы = состояние.ходы || [];
+  const помощь = состояние.помощь || [];
+  последний_ход = ходы.length ? ходы[ходы.length - 1].turn : 0;
+  const после = н => помощь.filter(п => (п.after_turn || 0) === н).map(п => п['вид'] === 'ревью' ? ревьюHTML(п) : помощьHTML(п)).join('');
+  лента.innerHTML = (ходы.length || помощь.length) ? после(0) + ходы.map(х => ходHTML(х) + после(х.turn)).join('')
+    : '<div class="мета" style="padding:10px 0">Разговор пуст. Назовите цель и задайте первый вопрос — например, «Мне нужно сравнить договоры связи Ростелеком VPN и ВымпелКом. Начнём: до какого числа платить Ростелекому?»</div>';
+  лента.scrollTop = лента.scrollHeight;
+  const п = состояние.память || {};
+  document.getElementById('чат-сводка').textContent =
+    `реплик ${п.реплик || 0} · сообщений в истории ${(состояние.история || []).length}`;
+}
+
+function записьHTML(код, з, свежая) {
+  const суть = з.термин ? `«${экранировать(з.термин)}» — ${экранировать(з.текст)}` : экранировать(з.текст);
+  return `<div class="запись${свежая ? ' свежая' : ''}" data-код="${код}"><span class="код">${код}</span>${суть}
+    <span class="реплика-номер">(реплика ${з.реплика})</span>${з.было ? `<div class="мета">было: ${экранировать(з.было)}</div>` : ''}</div>`;
+}
+
+function нарисоватьПамять() {
+  const п = состояние.память || {};
+  const блоки = [];
+  блоки.push(`<div class="память-блок"><h3>Цель</h3>` + (п.цель
+    ? `<div class="цель-текст" id="цель-текст">${экранировать(п.цель.текст)}</div><div class="реплика-номер">названа в реплике ${п.цель.реплика}</div>`
+    : '<div class="мета" id="цель-текст">ещё не названа</div>') +
+    (п.прежние_цели || []).map(з => `<div class="мета">прежняя (реплика ${з.реплика}): ${экранировать(з.текст)}</div>`).join('') + '</div>');
+  for (const [ключ, заголовок, буква] of [['уточнения', 'Уточнения', 'У'], ['ограничения', 'Ограничения', 'О'], ['термины', 'Термины', 'Т']]) {
+    const записи = п[ключ] || [];
+    блоки.push(`<div class="память-блок" id="память-${ключ}"><h3>${заголовок}</h3>` + (записи.length
+      ? записи.map((з, i) => записьHTML(буква + (i + 1), з, з.реплика === последний_ход)).join('')
+      : '<div class="мета">пока нет</div>') + '</div>');
+  }
+  const выяснено = п.выяснено || [];
+  блоки.push(`<div class="память-блок" id="память-выяснено"><h3>Выяснено по документам: ${выяснено.length}</h3>` + (выяснено.length
+    ? выяснено.map((з, i) => `<div class="запись${з.реплика === последний_ход ? ' свежая' : ''}"><span class="код">В${i + 1}</span>
+        <span class="реплика-номер">(реплика ${з.реплика})</span> ${экранировать(з.вопрос)}
+        <div class="мета">${экранировать(String(з.текст).slice(0, 200))}</div>` +
+        (з.источники || []).map(и => `<div class="цитата">→ ${паспорт(и)}</div>`).join('') + '</div>').join('')
+    : '<div class="мета">пока нет — сюда попадают ответы с подтверждёнными цитатами</div>') + '</div>');
+  document.getElementById('память-задачи').innerHTML = блоки.join('');
+}
+
+async function отправить() {
+  const поле = document.getElementById('чат-реплика');
+  const текст = поле.value.trim();
+  if (!текст) return;
+  const кнопка = document.getElementById('чат-отправить');
+  const ход = document.getElementById('чат-ход');
+  кнопка.disabled = true;
+  ход.textContent = 'разбор реплики → поиск по базе → ответ с источниками…';
+  // Ход идёт потоком (День 27): на локальной модели он занимает минуты, и
+  // страница показывает этап, модель и сколько токенов она уже написала.
+  const этапы = [];
+  const начало = Date.now();
+  let токены = null;
+  const показать = () => {
+    const сек = ((Date.now() - начало) / 1000).toFixed(0);
+    ход.innerHTML = `<div class="идёт">идёт реплика · ${сек} с</div>` + этапы.map((э, i) => {
+      const текущий = i === этапы.length - 1;
+      const секунд = текущий ? ((Date.now() - э._старт) / 1000).toFixed(0) : э.секунд;
+      const пишет = текущий && токены && токены.модель === э.модель
+        ? (токены.выход ? ` · пишет: ${токены.выход} ток.` : '') : '';
+      return `<div class="этап-строка" data-этап="${экранировать(э.этап)}">${текущий ? '…' : '✓'} ${этапHTML({...э, секунд})}${пишет}</div>`;
+    }).join('');
+  };
+  const таймер = setInterval(показать, 500);
+  try {
+    const ответ = await fetch('/api/chat/say', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session: сессия(), text: текст, model: document.getElementById('чат-модель').value, stream: true})});
+    if (!ответ.ok) {
+      const д = await ответ.json().catch(() => ({}));
+      throw new Error(д.error || ответ.statusText);
+    }
+    const чтец = ответ.body.getReader();
+    const декодер = new TextDecoder();
+    let буфер = '', итог = null;
+    for (;;) {
+      const {done, value} = await чтец.read();
+      if (done) break;
+      буфер += декодер.decode(value, {stream: true});
+      let i;
+      while ((i = буфер.indexOf('\n')) >= 0) {
+        const строка = буфер.slice(0, i).trim();
+        буфер = буфер.slice(i + 1);
+        if (!строка) continue;
+        const с = JSON.parse(строка);
+        if (с['событие'] === 'этап' && с['этап'] !== 'начало') {
+          const сейчас = Date.now();
+          if (этапы.length) этапы[этапы.length - 1].секунд = ((сейчас - этапы[этапы.length - 1]._старт) / 1000).toFixed(0);
+          этапы.push({этап: с['этап'], модель: с['модель'], локально: с['локально'], реранкер: с['реранкер'], подпись: с['подпись'],
+                      k_до: с.k_до, k_после: с.k_после, подвопросов: с['подвопросов'], _старт: сейчас});
+          токены = null;
+        } else if (с['событие'] === 'токены') {
+          токены = с;
+        } else if (с['событие'] === 'готово') {
+          итог = с;
+        } else if (с['событие'] === 'ошибка') {
+          throw new Error(с.error);
+        }
+        показать();
+      }
+    }
+    if (!итог) throw new Error('ход оборвался без итога');
+    поле.value = '';
+    состояние = итог.state;
+    нарисовать();
+    if (итог.help_text) {
+      ход.innerHTML = `<pre class="справка-помощи">${экранировать(итог.help_text)}</pre>`;
+      return;
+    }
+    if (итог.review) {
+      const р = итог.review;
+      ход.innerHTML = `/review ${экранировать(р['диапазон'])}: ${экранировать(р['вердикт'])}, находок ${(р['находки'] || []).length}, ` +
+        `${Number((р['метрики'] || {})['секунд'] || 0).toFixed(0)} с`;
+      return;
+    }
+    if (итог.help) {
+      const п = итог.help;
+      ход.innerHTML = `/help: ${п.abstain ? '«не знаю»' : 'ответ'}, источников ${(п.sources || []).length}, вызовов git ${
+        Math.max(0, (п.tool_calls || []).length - 2)}, ${Number((п.timings || {})['всего'] || 0).toFixed(1)} с` +
+        (п.fallback ? ` · <span class="предупреждение">${экранировать(п.fallback)}</span>` : '');
+      return;
+    }
+    const х = итог.turn;
+    const н = итог.net || {};
+    ход.innerHTML = `реплика ${х.turn}: ${экранировать((х.parse || {}).kind || х.kind)}, источников ${х.sources.length}, ` +
+      `${Number(х.seconds).toFixed(1)} с` + (н['offline'] != null ? ` · сеть: внешних запросов <b id="ход-внешних">${н['внешних'] || 0}</b>` : '');
+    if (window.офлайн) window.офлайн.обновить();
+  } catch (e) {
+    ход.innerHTML = `<span class="ошибка">${экранировать(e.message)}</span>`;
+  } finally {
+    clearInterval(таймер);
+    кнопка.disabled = false;
+    поле.focus();
+  }
+}
+
+async function новыйРазговор() {
+  if (!confirm(`Стереть историю и память задачи сессии «${сессия()}»?`)) return;
+  const данные = await запрос('/api/chat/new', {session: сессия()});
+  состояние = данные.state;
+  нарисовать();
+  document.getElementById('чат-ход').textContent =
+    `новый разговор: стёрто сообщений ${данные.reset.сообщений_стёрто}`;
+}
+
+async function прогнатьСценарии() {
+  const выбор = document.getElementById('сценарии-выбор').value;
+  try {
+    await запрос('/api/chat/scenarios', {ids: выбор ? [выбор] : [],
+      judge: document.getElementById('сценарии-судья').checked});
+  } catch (e) {
+    document.getElementById('сценарии-ход').innerHTML = `<div class="ошибка">${экранировать(e.message)}</div>`;
+    return;
+  }
+  обновить();
+}
+
+function дробь(п) { return Array.isArray(п) ? `${п[0]} из ${п[1]}` : п; }
+
+function нарисоватьСценарии() {
+  const р = состояние.работа;
+  const ходЭл = document.getElementById('сценарии-ход');
+  const кнопка = document.getElementById('сценарии-запустить');
+  if (р && !р.готово) {
+    кнопка.disabled = true;
+    const доля = р.всего ? Math.round(100 * р.сделано / р.всего) : 0;
+    ходЭл.innerHTML = `<div class="ход"><div style="width:${доля}%"></div></div>
+      <div class="мета">${экранировать(р.этап)}: ${р.сделано}/${р.всего} — ${экранировать(р.что)}</div>`;
+  } else {
+    кнопка.disabled = false;
+    ходЭл.innerHTML = р && р.ошибка ? `<div class="ошибка">${экранировать(р.ошибка)}</div>`
+      : (р && р.готово ? '<div class="мета ок">прогон закончен</div>' : '');
+  }
+  const п = состояние.сценарии;
+  const куда = document.getElementById('сценарии');
+  if (!п) { куда.innerHTML = р && !р.готово ? '' : '<div class="мета">Сценарии ещё не прогонялись.</div>'; return; }
+  const сц = п.scenarios;
+  const строка = (подпись, f) => `<tr><td>${подпись}</td>${сц.map(с => `<td class="ч">${f(с)}</td>`).join('')}</tr>`;
+  let html = `<div class="мета">Прогон ${экранировать(п.when)} · модель ${экранировать(п.model)} · ${п.seconds} с</div>
+    <table style="margin-top:6px"><tr><th>показатель</th>${сц.map(с => `<th>${экранировать(с.title)} (${с.id})</th>`).join('')}</tr>` +
+    строка('реплик в сценарии', с => с.totals.ходов) +
+    строка('поиск по базе на реплике', с => `${с.totals.с_поиском} из ${с.totals.ходов}`) +
+    строка('ответов с источниками', с => `${с.totals.с_источниками} из ${с.totals.ходов}`) +
+    строка('ответов по документам с chunk_id и цитатой', с => `${с.totals.с_документом_и_цитатой} из ${с.totals.документных}`) +
+    строка('нужный документ среди источников', с => дробь(с.totals.нужный_документ)) +
+    строка('ожидаемые факты в ответе', с => дробь(с.totals.факты)) +
+    строка('ловушка — «не знаю» с уточнением', с => дробь(с.totals.не_знаю)) +
+    строка('вид реплики понят верно', с => дробь(с.totals.вид)) +
+    строка('уточнения, ограничения, термины записаны', с => дробь(с.totals.память)) +
+    строка('цель на месте после каждой реплики', с => дробь(с.totals.цель_на_месте)) +
+    строка('итог опирается на «выяснено» с документами', с => дробь(с.totals.опора)) +
+    строка('судья: цель удержана', с => экранировать(с.judge.цель_удержана || '—')) +
+    строка('судья: ограничения соблюдены', с => экранировать(с.judge.ограничения_соблюдены || '—')) +
+    строка('судья: ответы по делу', с => экранировать(с.judge.ответы_по_делу || '—')) +
+    строка('проверок / провалов', с => `${с.totals.проверок} / <span class="${с.totals.провалов ? 'нет' : 'ок'}">${с.totals.провалов}</span>`) +
+    строка('время, с', с => с.totals.секунд) + '</table>';
+  for (const с of сц) {
+    html += `<details style="margin-top:8px"><summary>${экранировать(с.title)}: цель — ${экранировать((с.memory.цель || {}).текст || '—')}</summary>
+      ${с.judge && с.judge.пояснение ? `<div class="мета" style="margin:4px 0">Судья (${экранировать(с.judge.модель || '')}): ${экранировать(с.judge.пояснение)}</div>` : ''}
+      <table style="margin-top:6px"><tr><th>#</th><th>реплика</th><th>вид</th><th>ответ</th><th>источники</th><th>проверки</th></tr>` +
+      с.turns.map(х => `<tr><td>${х.turn}</td><td>${экранировать(х.message)}</td><td>${экранировать(х.parse.kind)}</td>
+        <td>${экранировать(String(х.text).slice(0, 220))}</td><td>${х.sources.length}</td>
+        <td>${х.checks.map(к => `<span class="${к.ok ? 'ок' : 'нет'}" title="${экранировать(к.note)}">${к.ok ? '✓' : '✗'} ${экранировать(к.name)}</span>`).join('<br>')}</td></tr>`).join('') +
+      '</table></details>';
+  }
+  куда.innerHTML = html;
+}
+
+document.getElementById('чат-отправить').addEventListener('click', отправить);
+document.getElementById('чат-реплика').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); отправить(); }
+});
+document.getElementById('чат-открыть').addEventListener('click', обновить);
+document.getElementById('чат-сессия').addEventListener('change', обновить);
+document.getElementById('чат-новый').addEventListener('click', новыйРазговор);
+document.getElementById('сценарии-запустить').addEventListener('click', прогнатьСценарии);
+обновить();
+</script>
+</body>
+</html>

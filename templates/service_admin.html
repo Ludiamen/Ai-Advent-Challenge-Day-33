@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Приватный AI-сервис — состояние</title>
+<style>
+  :root { --фон: #f6f7f9; --карта: #fff; --текст: #1d2330; --тускло: #6b7280; --линия: #e3e6eb; --акцент: #2453c8;
+          --ок: #157347; --плохо: #b42318; --жёлто: #9a6700; }
+  @media (prefers-color-scheme: dark) { :root { --фон: #14171c; --карта: #1c2027; --текст: #e6e8ec; --тускло: #9aa3af;
+          --линия: #2c323c; --акцент: #7aa2ff; --ок: #4cc38a; --плохо: #ff7b72; --жёлто: #e3b341; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: var(--фон); color: var(--текст); }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  .мета { color: var(--тускло); font-size: 13px; }
+  .сетка { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 12px 0; }
+  .карта { background: var(--карта); border: 1px solid var(--линия); border-radius: 10px; padding: 12px 14px; }
+  .большое { font-size: 26px; font-weight: 600; }
+  .ок { color: var(--ок); } .плохо { color: var(--плохо); } .жёлто { color: var(--жёлто); }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--линия); white-space: nowrap; }
+  th { color: var(--тускло); font-weight: 500; }
+  td.число, th.число { text-align: right; }
+  .прокрутка { overflow-x: auto; }
+  input { padding: 8px 10px; border: 1px solid var(--линия); border-radius: 8px; background: var(--фон); color: var(--текст);
+          font: inherit; min-width: 260px; }
+  button { padding: 7px 12px; border-radius: 8px; border: 1px solid var(--акцент); background: var(--акцент); color: #fff;
+           font: inherit; cursor: pointer; } button:disabled { opacity: .5; cursor: default; }
+  .ряд { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .метка { display: inline-block; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--линия); font-size: 12px; margin: 1px 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Приватный AI-сервис · состояние</h1>
+  <div class="мета">Шлюз перед локальной Ollama: HTTPS, ключи API, подсети, лимиты, очередь. Данные — только с ключом «админ».</div>
+  <div class="ряд" style="margin-top:10px">
+    <input type="password" id="ключ" placeholder="ключ «админ»: sk-day30-…" autocomplete="off">
+    <button id="войти">Показать</button>
+    <span class="мета" id="обновлено"></span>
+  </div>
+
+  <div class="сетка">
+    <div class="карта" id="служба"><h2>Служба</h2><div class="мета">—</div></div>
+    <div class="карта" id="адрес"><h2>Адрес и сертификат</h2><div class="мета">—</div></div>
+    <div class="карта" id="лимиты"><h2>Модель и лимиты</h2><div class="мета">—</div></div>
+    <div class="карта" id="очередь"><h2>Очередь сейчас</h2><div class="мета">—</div></div>
+    <div class="карта" id="раннер"><h2>Раннер модели</h2><div class="мета">—</div></div>
+    <div class="карта" id="сеть"><h2>Журнал сети сервиса</h2><div class="мета">—</div></div>
+  </div>
+
+  <div class="сетка" style="grid-template-columns: repeat(auto-fit, minmax(420px, 1fr))">
+    <div class="карта" id="ключи-карта"><h2>Ключи API</h2><div class="прокрутка" id="ключи">—</div></div>
+    <div class="карта" id="клиенты-карта"><h2>Клиенты сервиса <span class="мета">(по журналу запросов)</span></h2><div class="прокрутка" id="клиенты">—</div></div>
+  </div>
+
+  <div class="карта" id="нагрузка-карта" style="margin-bottom:12px">
+    <h2>Нагрузка из контейнера Docker</h2>
+    <div class="ряд" style="margin-bottom:8px">
+      <button id="нагрузка-8">8 клиентов × 1 вопрос</button>
+      <button id="нагрузка-4">4 клиента × 1 вопрос</button>
+      <span class="мета" id="нагрузка-ход"></span>
+    </div>
+    <div class="прокрутка" id="нагрузка">—</div>
+  </div>
+
+  <div class="карта" id="телеграм-карта" style="margin-bottom:12px">
+    <h2>Telegram-бот <span class="мета">(клиент сервиса: ключ «телеграм», отвечает только владельцу)</span></h2>
+    <div class="ряд" style="margin-bottom:8px">
+      <button id="телеграм-старт">Запустить</button>
+      <button id="телеграм-стоп">Остановить</button>
+      <span class="мета" id="телеграм-ход"></span>
+    </div>
+    <div class="прокрутка" id="телеграм">—</div>
+  </div>
+
+  <div class="карта" id="проект-карта" style="margin-bottom:12px">
+    <h2>Ассистент проекта <span class="мета">(День 31: /v1/project/help — ключ с правом «проект», /help в Telegram)</span></h2>
+    <div class="ряд" style="margin-bottom:8px">
+      <button id="проект-облако">Облако (ds-flash)</button>
+      <button id="проект-локально">Локально (loc-rag-docs)</button>
+      <span class="мета" id="проект-ход"></span>
+    </div>
+    <div id="проект">—</div>
+  </div>
+
+  <div class="карта"><h2>Последние запросы <span class="мета">(только метаданные — тексты не пишутся)</span></h2>
+    <div class="прокрутка" id="журнал">—</div></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const э = т => String(т ?? '—').replace(/[&<>"]/g, с => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[с]));
+const ч = (в, з = 1) => в == null ? '—' : (typeof в === 'number' ? в.toFixed(з).replace('.', ',') : в);
+try { $('ключ').value = sessionStorage.getItem('ключ-админа') || ''; } catch (е) {}
+let таймер = null;
+$('войти').onclick = () => { try { sessionStorage.setItem('ключ-админа', $('ключ').value.trim()); } catch (е) {} опрос(); };
+$('нагрузка-8').onclick = () => нагрузка(8);
+$('нагрузка-4').onclick = () => нагрузка(4);
+$('телеграм-старт').onclick = () => телеграм('старт');
+$('телеграм-стоп').onclick = () => телеграм('стоп');
+$('проект-облако').onclick = () => модельПроекта('облако');
+$('проект-локально').onclick = () => модельПроекта('локально');
+
+// День 31: переключатель модели ассистента проекта — без перезапуска службы (spec FR-11).
+async function модельПроекта(режим) {
+  $('проект-ход').textContent = 'переключаю…';
+  const r = await fetch('/admin/api/project-model', {method: 'POST', headers: {'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + $('ключ').value.trim()}, body: JSON.stringify({режим})});
+  const т = await r.json().catch(() => ({}));
+  $('проект-ход').textContent = r.status === 200 ? `режим «${т.режим}», модель ${т.модель}` : 'ошибка: ' + ((т.error || {}).message || r.status);
+}
+
+async function телеграм(действие) {
+  $('телеграм-ход').textContent = действие === 'старт' ? 'запускаю…' : 'останавливаю…';
+  const r = await fetch('/admin/api/telegram', {method: 'POST', headers: {'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + $('ключ').value.trim()}, body: JSON.stringify({действие})});
+  const т = await r.json().catch(() => ({}));
+  $('телеграм-ход').textContent = r.status === 200 ? `служба day31-tg: ${т.состояние}` : 'ошибка: ' + ((т.error || {}).message || r.status);
+}
+
+async function нагрузка(n) {
+  const r = await fetch('/admin/api/load', {method: 'POST', headers: {'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + $('ключ').value.trim()}, body: JSON.stringify({ступени: [n], вопросов: 1, документы: 0})});
+  const т = await r.json().catch(() => ({}));
+  $('нагрузка-ход').textContent = т.error ? 'нагрузка: ' + т.error : `запущено: ${n} клиентов из контейнера Docker`;
+}
+
+function карта(id, html) { $(id).innerHTML = $(id).querySelector('h2').outerHTML + html; }
+
+async function опрос() {
+  clearTimeout(таймер);
+  try {
+    const r = await fetch('/admin/api/state', {headers: {'Authorization': 'Bearer ' + $('ключ').value.trim()}});
+    const с = await r.json();
+    if (r.status !== 200) { $('обновлено').textContent = `HTTP ${r.status}: ${(с.error || {}).message || ''}`; return; }
+    показать(с);
+    $('обновлено').textContent = 'обновлено ' + new Date().toLocaleTimeString();
+  } catch (е) { $('обновлено').textContent = 'нет ответа: ' + е; }
+  таймер = setTimeout(опрос, 1000);
+}
+
+function показать(с) {
+  const пр = с.project;
+  if (пр) {
+    $('проект').innerHTML = `<div class="большое" id="проект-режим">${э(пр.режим)}</div>
+      <div class="мета">проект «${э(пр.проект)}» · модель <b>${э(пр.модель)}</b> · облако — ${э(пр.облачная)}
+        (единственный внешний хост сервиса), локально — ${э(пр.локальная)}</div>
+      <div class="мета">сеть сервиса: внешних ${э((с.network || {}).внешних)} — ${((с.network || {}).внешние_хосты || [])
+        .map(х => `<span class="метка">${э(х)}</span>`).join('') || 'нет'}</div>`;
+    $('проект-облако').disabled = пр.режим === 'облако';
+    $('проект-локально').disabled = пр.режим === 'локально';
+  }
+  const у = с.unit || {};
+  карта('служба', `<div class="большое ${у.состояние === 'active' ? 'ок' : 'плохо'}">${э(у.состояние || 'не служба')}</div>
+    <div class="мета">systemd --user · day31-llm · ${э(у.подсостояние)} · PID ${э(у.pid)} · перезапусков ${э(у.перезапусков)}</div>
+    <div class="мета">процесс шлюза PID ${э(с.pid)}${у.с ? ' · запущена ' + э(у.с) : ''}</div>`);
+  const ц = с.cert || {}, сл = с.service || {};
+  карта('адрес', `<div class="большое">https://${э(ц.адрес_в_сети)}:${э(сл.порт)}</div>
+    <div class="мета">сертификат своего центра · до ${э(ц.до)}</div>
+    <div>${(ц.san || []).map(а => `<span class="метка">${э(а)}</span>`).join('')}</div>
+    <div class="мета" style="margin-top:4px">подсети: ${(сл.подсети || []).map(э).join(', ')}</div>`);
+  const л = сл.лимиты || {};
+  карта('лимиты', `<div class="большое">${э(сл.модель)}</div>
+    <div class="мета">лимит ключа: <b>${э(л.запросов_в_минуту)}</b> запросов в минуту · очередь: 1 идёт + <b>${э(л.очередь)}</b> ждут</div>
+    <div class="мета">вход ≤ <b>${э(л.вход_токенов)}</b> токенов · ответ ≤ <b>${э(л.ответ_токенов)}</b> · окно ${э(л.окно)} · таймаут ${э(л.таймаут_с)} с · тело ≤ ${э(л.тело_байт)} байт</div>`);
+  const о = с.queue || {};
+  карта('очередь', `<div class="большое">идёт ${э(о.идёт)} · ждут <span class="${о.ждут ? 'жёлто' : ''}">${э(о.ждут)}</span> из ${э(о.мест_в_очереди)}</div>
+    <div class="мета">обслужено ${э(о.обслужено)} · отказано (429 queue_full) ${э(о.отказано)} · средняя генерация ${ч(о.средняя_с)} с</div>`);
+  const р = с.runner;
+  карта('раннер', р ? `<div class="большое">${ч(р.rss_мб, 0)} МБ</div><div class="мета">llama-server PID ${э(р.pid)} · пик ${ч(р.hwm_мб, 0)} МБ · CPU ${ч(р.cpu_с)} с с запуска</div>`
+                    : `<div class="мета">модель не в памяти</div>`);
+  const с2 = с.network || {};
+  карта('сеть', `<div class="большое ${с2.внешних ? 'плохо' : 'ок'}">внешних ${э(с2.внешних)}</div>
+    <div class="мета">локальных ${э(с2.локальных)} · заблокировано ${э(с2.заблокировано)} — офлайн-режим Дня 27: запросы не уходят с машины</div>`);
+  $('ключи').innerHTML = `<table><tr><th>имя</th><th>права</th><th>создан</th><th>отозван</th></tr>` +
+    (с.keys || []).map(к => `<tr><td>${э(к.имя)}</td><td>${(к.права || []).map(п => `<span class="метка">${э(п)}</span>`).join('')}</td><td>${э(к.создан)}</td><td>${э(к.отозван || '')}</td></tr>`).join('') + `</table>`;
+  const сети = а => а.startsWith('172.17.') ? 'Docker' : (а.startsWith('192.168.') ? 'домашняя сеть' : (а.startsWith('127.') ? 'этот ноутбук' : ''));
+  $('клиенты').innerHTML = `<table><tr><th>адрес</th><th>где</th><th class="число">запросов</th><th class="число">отказов</th><th>последний</th></tr>` +
+    (с.clients || []).map(к => `<tr><td>${э(к.адрес)}</td><td>${э(сети(к.адрес || ''))}</td><td class="число">${к.запросов}</td><td class="число">${к.отказов}</td><td>${э((к.последний || '').replace('T', ' '))}</td></tr>`).join('') + `</table>`;
+  const н = (с.load || {}), п = н.полный || н.последний;
+  $('нагрузка-ход').textContent = н.идёт ? 'идёт нагрузка из контейнера…' : ($('нагрузка-ход').textContent.startsWith('запущено') ? '' : $('нагрузка-ход').textContent);
+  $('нагрузка-8').disabled = $('нагрузка-4').disabled = !!н.идёт;
+  $('нагрузка').innerHTML = п ? `<div class="мета">прогон ${э(п.метка)} → ${э(п.адрес)} · ошибок всего <b class="${п.всего_ошибок ? 'плохо' : 'ок'}">${э(п.всего_ошибок)}</b></div>
+    <table><tr><th class="число">клиентов</th><th class="число">запросов</th><th class="число">успешно</th><th class="число">ошибок</th><th class="число">429 (повтор)</th>
+    <th class="число">задержка p50, с</th><th class="число">p95, с</th><th class="число">ожидание p50, с</th><th class="число">1-й токен p50, с</th><th class="число">ответов/мин</th><th class="число">пик ОЗУ, МБ</th><th class="число">CPU, с</th></tr>` +
+    (п.ступени || []).map(с => `<tr><td class="число">${с.клиентов}</td><td class="число">${с.запросов}</td><td class="число">${с.успешно}</td><td class="число ${с.ошибок ? 'плохо' : ''}">${с.ошибок}</td><td class="число">${с.отказов_429}</td>
+      <td class="число">${ч(с.задержка_p50_с)}</td><td class="число">${ч(с.задержка_p95_с)}</td><td class="число">${ч(с.ожидание_p50_с)}</td><td class="число">${ч(с.первый_токен_p50_с)}</td><td class="число">${ч(с.ответов_в_минуту, 2)}</td>
+      <td class="число">${ч((с.ресурсы || {}).пик_мб, 0)}</td><td class="число">${ч((с.ресурсы || {}).cpu_с)}</td></tr>`).join('') + `</table>` +
+    (п.документы ? `<div class="мета" style="margin-top:6px">по документам: запросов ${п.документы.запросов}, успешно ${п.документы.успешно}, ошибок ${п.документы.ошибок}, 429 ${п.документы.отказов_429}, задержка p50 ${ч(п.документы.задержка_p50_с)} с</div>` : '') +
+    (н.последний && н.полный && н.последний.файл !== н.полный.файл ? (() => { const с = (н.последний.ступени || [])[0] || {};
+      return `<div class="мета" style="margin-top:6px" id="нагрузка-последний">последний прогон ${э(н.последний.метка)}: ${с.клиентов} клиентов — запросов ${с.запросов}, успешно ${с.успешно}, ошибок ${с.ошибок}, 429 ${с.отказов_429}, задержка p50 ${ч(с.задержка_p50_с)} с, p95 ${ч(с.задержка_p95_с)} с, ожидание p95 ${ч(с.ожидание_p95_с)} с</div>`; })() : '')
+    : '<div class="мета">прогонов ещё не было</div>';
+  const т = с.telegram;
+  if (т) {
+    const сл = т.служба || {}, п = т.состояние || {}, сеть = п.сеть || {};
+    const назад = п.последний_опрос ? Math.max(0, Math.round((Date.now() - Date.parse(п.последний_опрос)) / 1000)) : null;
+    $('телеграм-старт').disabled = сл.состояние === 'active';
+    $('телеграм-стоп').disabled = сл.состояние !== 'active';
+    $('телеграм').innerHTML = `<div class="ряд" style="gap:20px;align-items:baseline">
+        <div class="большое ${сл.состояние === 'active' ? 'ок' : 'плохо'}" id="телеграм-служба">${э(сл.состояние || 'не служба')}</div>
+        <div class="мета">systemd --user · day31-tg · PID ${э(сл.pid)} · перезапусков ${э(сл.перезапусков)}</div></div>
+      <div class="мета">бот <b>${э(п.бот)}</b> · владелец ${т.владелец_задан ? 'задан' : '<span class="плохо">не задан</span>'} · токен ${т.токен_задан ? 'задан' : '<span class="плохо">нет</span>'} · ключ сервиса ${т.ключ_есть ? 'есть' : '<span class="плохо">нет</span>'} · последний опрос ${назад == null ? '—' : назад + ' с назад'}${п.ошибок_сети_подряд ? ' · <span class="плохо">сбоев сети подряд ' + э(п.ошибок_сети_подряд) + '</span>' : ''}</div>
+      <div class="мета" id="телеграм-сеть">сеть бота: внешних ${э(сеть.внешних)} — ${(сеть.внешние_хосты || []).map(х => `<span class="метка">${э(х)}</span>`).join('') || 'нет'} · локальных ${э(сеть.локальных)} · заблокировано ${э(сеть.заблокировано)}</div>
+      <div class="мета">попыток чужих: ${э(т.чужих)} · в журнале бота — только метаданные</div>
+      <table id="телеграм-журнал"><tr><th>время</th><th>кто</th><th>что</th><th class="число">код</th><th>ошибка</th><th class="число">вход</th><th class="число">ответ</th><th class="число">очередь, с</th><th class="число">всего, с</th><th class="число">правок</th><th class="число">скрыто ПД</th></tr>` +
+      (т.журнал || []).map(з => `<tr><td>${э((з.время || '').slice(11))}</td><td>${э(з.кто)}</td><td>${э(з.вид)}${з.команда ? ' ' + э(з.команда) : ''}</td>
+        <td class="число ${(з.код || 0) >= 400 ? 'плохо' : 'ок'}">${э(з.код ?? '')}</td><td>${э(з.ошибка || '')}</td><td class="число">${э(з.вход ?? '')}</td><td class="число">${э(з.ответ ?? '')}</td>
+        <td class="число">${ч(з.ожидание_с)}</td><td class="число">${ч(з.длительность_с)}</td><td class="число">${э(з.правок ?? '')}</td><td class="число">${э(з.скрыто ?? '')}</td></tr>`).join('') + `</table>`;
+  }
+  $('журнал').innerHTML = `<table><tr><th>время</th><th>адрес клиента</th><th>ключ</th><th>ручка</th><th class="число">код</th><th>ошибка</th><th class="число">ожидание, с</th><th class="число">длит., с</th><th class="число">вход</th><th class="число">ответ</th><th>причина</th></tr>` +
+    (с.requests || []).map(з => `<tr><td>${э((з.время || '').slice(11))}</td><td>${э(з.адрес)}</td><td>${э(з.ключ || '')}</td><td>${э(з.ручка)}</td>
+      <td class="число ${з.код >= 400 ? 'плохо' : 'ок'}">${э(з.код)}</td><td>${э(з.ошибка || '')}</td><td class="число">${ч(з.ожидание_с)}</td><td class="число">${ч(з.длительность_с)}</td>
+      <td class="число">${э(з.вход ?? '')}</td><td class="число">${э(з.ответ ?? '')}</td><td>${э(з.причина || '')}</td></tr>`).join('') + `</table>`;
+}
+if ($('ключ').value) опрос();
+</script>
+</body>
+</html>

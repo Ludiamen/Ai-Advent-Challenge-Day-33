@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Приватный AI-сервис — чат</title>
+<style>
+  :root { --фон: #f6f7f9; --карта: #fff; --текст: #1d2330; --тускло: #6b7280; --линия: #e3e6eb; --акцент: #2453c8;
+          --ок: #157347; --плохо: #b42318; --жёлто: #fff7d6; }
+  @media (prefers-color-scheme: dark) { :root { --фон: #14171c; --карта: #1c2027; --текст: #e6e8ec; --тускло: #9aa3af;
+          --линия: #2c323c; --акцент: #7aa2ff; --ок: #4cc38a; --плохо: #ff7b72; --жёлто: #3a3320; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--фон); color: var(--текст); }
+  main { max-width: 900px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .мета { color: var(--тускло); font-size: 13px; margin-bottom: 12px; }
+  .карта { background: var(--карта); border: 1px solid var(--линия); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .ряд { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=password], input[type=text], textarea { flex: 1; min-width: 200px; padding: 8px 10px; border: 1px solid var(--линия);
+          border-radius: 8px; background: var(--фон); color: var(--текст); font: inherit; }
+  textarea { width: 100%; min-height: 70px; resize: vertical; }
+  button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--акцент); background: var(--акцент); color: #fff;
+           font: inherit; cursor: pointer; }
+  button.вторая { background: transparent; color: var(--акцент); }
+  button:disabled { opacity: .5; cursor: default; }
+  .режим label { margin-right: 14px; }
+  #история .реплика { padding: 10px 12px; border-radius: 10px; margin: 8px 0; white-space: pre-wrap; }
+  .user { background: var(--фон); border: 1px solid var(--линия); }
+  .assistant { background: var(--карта); border: 1px solid var(--акцент); }
+  .ошибка { background: var(--жёлто); border: 1px solid var(--плохо); color: var(--плохо); }
+  .подпись { color: var(--тускло); font-size: 12.5px; margin-top: 6px; white-space: normal; }
+  .источник { font-size: 13px; margin-top: 6px; }
+  .цитата { font-size: 13px; color: var(--ок); margin-left: 14px; }
+  #статус { color: var(--тускло); font-size: 13px; min-height: 18px; margin-top: 6px; }
+  code { font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Приватный AI-сервис · чат</h1>
+  <div class="мета" id="здоровье">проверяю сервис…</div>
+
+  <div class="карта">
+    <div class="ряд">
+      <input type="password" id="ключ" placeholder="ключ API: sk-day30-…" autocomplete="off">
+      <button class="вторая" id="запомнить" title="ключ хранится только в этой вкладке">Запомнить во вкладке</button>
+    </div>
+    <div class="ряд режим" style="margin-top:8px">
+      <label><input type="radio" name="режим" id="режим-чат" value="чат" checked> чат (/v1/chat/completions, поток)</label>
+      <label><input type="radio" name="режим" id="режим-документы" value="документы"> по документам (/v1/documents/answer)</label>
+    </div>
+  </div>
+
+  <div class="карта">
+    <div id="история"></div>
+    <textarea id="вопрос" placeholder="Вопрос…"></textarea>
+    <div class="ряд" style="margin-top:8px">
+      <button id="отправить">Отправить</button>
+      <button class="вторая" id="новый">Новый разговор</button>
+      <span class="мета" id="контекст" style="margin:0"></span>
+    </div>
+    <div id="статус"></div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const история = [];
+let идёт = false;
+try { $('ключ').value = sessionStorage.getItem('ключ-сервиса') || ''; } catch (e) {}
+// Ключ из ссылки «…/chat#key=sk-day30-…» (удобно открыть с телефона): часть после # на сервер не уходит;
+// ключ — в память вкладки, а из адресной строки и истории он сразу стирается.
+if (location.hash.startsWith('#key=')) {
+  $('ключ').value = decodeURIComponent(location.hash.slice(5));
+  try { sessionStorage.setItem('ключ-сервиса', $('ключ').value); } catch (e) {}
+  history.replaceState(null, '', location.pathname);
+}
+$('запомнить').onclick = () => { try { sessionStorage.setItem('ключ-сервиса', $('ключ').value.trim()); } catch (e) {}
+  $('статус').textContent = 'Ключ запомнен в этой вкладке (на сервер он не сохраняется).'; };
+
+fetch('/health').then(r => r.json()).then(з => {
+  $('здоровье').textContent = `сервис: ${з.status} · модель ${з.model} · ${location.protocol}//${location.host} · очередь: идёт ${з.queue.идёт}, ждут ${з.queue.ждут} из ${з.queue.мест_в_очереди}`;
+}).catch(() => { $('здоровье').textContent = 'сервис не отвечает'; });
+
+function реплика(класс, текст) {
+  const д = document.createElement('div');
+  д.className = 'реплика ' + класс;
+  д.textContent = текст;
+  $('история').appendChild(д);
+  д.scrollIntoView({block: 'nearest'});
+  return д;
+}
+function подпись(блок, текст) {
+  const п = document.createElement('div'); п.className = 'подпись'; п.textContent = текст; блок.appendChild(п); return п;
+}
+function отказ(код, тело, заголовки) {
+  const е = (тело && тело.error) || {};
+  const повтор = заголовки && заголовки.get('retry-after');
+  return `HTTP ${код} · ${е.code || ''}: ${е.message || ''}` + (повтор ? ` (Retry-After: ${повтор} с)` : '');
+}
+$('новый').onclick = () => { история.length = 0; $('история').innerHTML = ''; $('статус').textContent = ''; $('контекст').textContent = ''; };
+$('отправить').onclick = отправить;
+$('вопрос').addEventListener('keydown', е => { if (е.key === 'Enter' && (е.ctrlKey || е.metaKey)) отправить(); });
+
+async function отправить() {
+  const текст = $('вопрос').value.trim();
+  const ключ = $('ключ').value.trim();
+  if (!текст || идёт) return;
+  идёт = true; $('отправить').disabled = true;
+  реплика('user', текст);
+  $('вопрос').value = '';
+  const начало = performance.now();
+  try {
+    if (document.querySelector('input[name=режим]:checked').value === 'документы') await документы(текст, ключ, начало);
+    else await чат(текст, ключ, начало);
+  } catch (е) {
+    реплика('ошибка', 'Сеть: ' + е);
+  } finally {
+    идёт = false; $('отправить').disabled = false;
+  }
+}
+
+async function чат(текст, ключ, начало) {
+  история.push({role: 'user', content: текст});
+  $('статус').textContent = 'отправляю…';
+  const r = await fetch('/v1/chat/completions', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ключ},
+    body: JSON.stringify({model: 'loc-rag-docs', stream: true, messages: история})});
+  if (r.status !== 200) {
+    история.pop();
+    const тело = await r.json().catch(() => ({}));
+    реплика('ошибка', отказ(r.status, тело, r.headers)).id = 'последний-отказ';
+    $('статус').textContent = '';
+    if (r.headers.get('x-prompt-tokens')) $('контекст').textContent = `вход ${r.headers.get('x-prompt-tokens')} из ${r.headers.get('x-prompt-tokens-limit')} токенов`;
+    return;
+  }
+  const блок = реплика('assistant', '');
+  блок.id = 'последний-ответ';
+  const чтение = r.body.getReader(); const декодер = new TextDecoder();
+  let хвост = '', ответ = '', первый = null, итог = null;
+  for (;;) {
+    const {value, done} = await чтение.read();
+    if (done) break;
+    хвост += декодер.decode(value, {stream: true});
+    let i;
+    while ((i = хвост.indexOf('\n\n')) >= 0) {
+      const событие = хвост.slice(0, i); хвост = хвост.slice(i + 2);
+      if (событие.startsWith(': ')) { $('статус').textContent = событие.slice(2) === 'очередь 0' ? 'генерация…' : 'в очереди: ' + событие.slice(2); continue; }
+      if (!событие.startsWith('data: ')) continue;
+      const данные = событие.slice(6);
+      if (данные === '[DONE]') continue;
+      const ч = JSON.parse(данные);
+      if (ч.error) { блок.className = 'реплика ошибка'; блок.textContent = `${ч.error.code}: ${ч.error.message}`; continue; }
+      const выбор = (ч.choices || [])[0] || {};
+      const кусок = (выбор.delta || {}).content || '';
+      if (кусок) { if (первый === null) { первый = performance.now(); $('статус').textContent = 'пишет…'; } ответ += кусок; блок.textContent = ответ; }
+      if (выбор.finish_reason) итог = ч;
+    }
+  }
+  история.push({role: 'assistant', content: ответ});
+  const у = (итог && итог.usage) || {};
+  подпись(блок, `loc-rag-docs · вход ${у.prompt_tokens ?? '—'} · ответ ${у.completion_tokens ?? '—'} токенов · ожидание в очереди ${итог && итог.x_queue_wait != null ? итог.x_queue_wait : '—'} с · первый токен ${первый ? ((первый - начало) / 1000).toFixed(1) : '—'} с · всего ${((performance.now() - начало) / 1000).toFixed(1)} с · ${итог ? итог.choices[0].finish_reason : ''}`);
+  $('статус').textContent = '';
+  $('контекст').textContent = у.prompt_tokens != null ? `в истории ${история.length} сообщений · вход ${у.prompt_tokens} токенов (предел 3400)` : '';
+}
+
+async function документы(текст, ключ, начало) {
+  $('статус').textContent = 'ищу в документах и отвечаю (на CPU это 2–4 минуты)…';
+  const r = await fetch('/v1/documents/answer', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ключ}, body: JSON.stringify({question: текст})});
+  const тело = await r.json().catch(() => ({}));
+  $('статус').textContent = '';
+  if (r.status !== 200) { реплика('ошибка', отказ(r.status, тело, r.headers)).id = 'последний-отказ'; return; }
+  const блок = реплика('assistant', тело.abstain ? `Не знаю. ${тело.clarification || ''}` : тело.answer);
+  блок.id = 'последний-ответ';
+  for (const и of тело.sources || []) {
+    const п = подпись(блок, `[${и.n}] ${и.source} · ${и.section || ''}${и.page ? ' · стр. ' + и.page : ''} · ${и.chunk_id}`);
+    п.className = 'источник';
+  }
+  for (const ц of тело.quotes || []) {
+    const п = подпись(блок, `${ц.confirmed ? '✓' : '✗'} ${ц.check || ''} «${ц.text}»`); п.className = 'цитата';
+  }
+  const у = тело.usage || {};
+  подпись(блок, `по документам · loc-rag-docs · вход ${у.prompt_tokens ?? '—'} · ответ ${у.completion_tokens ?? '—'} токенов · ожидание ${r.headers.get('x-queue-wait') || '—'} с · всего ${((performance.now() - начало) / 1000).toFixed(1)} с`);
+}
+</script>
+</body>
+</html>

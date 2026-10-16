@@ -1,0 +1,75 @@
+<!-- Полоса офлайн-режима (День 27): одна на всех страницах. Переключатель
+     включает режим для всего сервера; счётчики — журнал сети процесса: в
+     офлайне внешних запросов должно быть 0. Облачные модели в списках
+     (option[data-local="0"]) в офлайне становятся серыми. -->
+<style>
+  .офлайн-полоса { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:8px 0 4px;
+                   padding:7px 12px; border-radius:8px; border:1px solid #d1d5db; background:#f9fafb;
+                   font-size:.86rem; }
+  .офлайн-полоса.вкл { background:#ecfdf5; border-color:#10b981; }
+  .офлайн-полоса label { display:flex; flex-direction:row; align-items:center; gap:6px; font-size:.9rem;
+                         color:#111827; cursor:pointer; }
+  .офлайн-полоса .значок { font-weight:700; }
+  .офлайн-полоса .счёт { font-variant-numeric: tabular-nums; }
+  .офлайн-полоса .внешних-есть { color:#b91c1c; font-weight:600; }
+  .офлайн-полоса .внешних-нет { color:#047857; font-weight:600; }
+</style>
+<div class="офлайн-полоса" id="офлайн-полоса" data-on="0">
+  <label title="Все роли агента — локальные модели из local-roles.json; облачные модели и MCP-серверы с выходом в интернет заблокированы">
+    <input type="checkbox" id="офлайн-тумблер"> <span class="значок" id="офлайн-значок">☁ облако</span>
+  </label>
+  <span class="мета" id="офлайн-режим">агент может ходить в облачные модели</span>
+  <span class="счёт" id="офлайн-сеть"></span>
+  <a href="/local#офлайн-карточка" class="мета">карта ролей и журнал сети →</a>
+</div>
+<script>
+(function () {
+  const полоса = document.getElementById('офлайн-полоса');
+  const тумблер = document.getElementById('офлайн-тумблер');
+  let последнее = null;
+
+  function применить(с) {
+    последнее = с;
+    const вкл = !!с.on;
+    полоса.dataset.on = вкл ? '1' : '0';
+    полоса.classList.toggle('вкл', вкл);
+    тумблер.checked = вкл;
+    document.getElementById('офлайн-значок').textContent = вкл ? '🔒 офлайн' : '☁ облако';
+    document.getElementById('офлайн-режим').textContent = вкл
+      ? 'только локальные модели (Ollama на этой машине) — облако и интернет заблокированы'
+      : 'агент может ходить в облачные модели';
+    const н = с.net || {};
+    const внешних = н['внешних'] || 0;
+    document.getElementById('офлайн-сеть').innerHTML =
+      `сеть: локальных <b id="сеть-локальных">${н['локальных'] || 0}</b> · внешних ` +
+      `<b id="сеть-внешних" class="${внешних ? 'внешних-есть' : 'внешних-нет'}">${внешних}</b> · ` +
+      `заблокировано <b id="сеть-заблокировано">${н['заблокировано'] || 0}</b>`;
+    // Облачные модели в списках: в офлайне — серые (вернуть, если ключ есть).
+    document.querySelectorAll('option[data-local="0"]').forEach(о => {
+      о.disabled = вкл || о.dataset.nokey === '1';
+      if (вкл && о.selected) о.parentElement.value = '';
+    });
+    document.dispatchEvent(new CustomEvent('офлайн', {detail: с}));
+  }
+
+  async function обновить() {
+    try {
+      const ответ = await fetch('/api/offline');
+      if (ответ.ok) применить(await ответ.json());
+    } catch (e) { /* сервер перезапускается — следующий опрос покажет */ }
+  }
+
+  тумблер.addEventListener('change', async () => {
+    тумблер.disabled = true;
+    try {
+      const ответ = await fetch('/api/offline', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({on: тумблер.checked, reset_net: true})});
+      применить(await ответ.json());
+    } finally { тумблер.disabled = false; }
+  });
+
+  window.офлайн = {обновить, состояние: () => последнее};
+  обновить();
+  setInterval(() => { if (!document.hidden) обновить(); }, 4000);
+})();
+</script>

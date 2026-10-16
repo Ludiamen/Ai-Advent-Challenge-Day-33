@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Агент миграции ГИС — локальный RAG</title>
+  <style>
+    :root { --кратко:#3b82f6; --рабочая:#d97706; --долго:#059669; --ядро:#6b7280; }
+    body { font-family: system-ui, sans-serif; max-width: 1280px; margin: 24px auto; padding: 0 16px;
+           color:#111827; }
+    h1 { margin-bottom: 2px; font-size: 1.4rem; }
+    .idea { color:#6b7280; font-size:.86rem; margin-top:0; }
+    .раскладка { display:grid; grid-template-columns: 1.35fr 1fr; gap:18px; align-items:start; }
+    @media (max-width: 960px) { .раскладка { grid-template-columns: 1fr; } }
+    .панель { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;
+              padding:10px 14px; border:1px solid #e5e7eb; border-radius:8px; background:#fafafa; }
+    .панель label { display:flex; flex-direction:column; font-size:.78rem; color:#374151; gap:3px; }
+    .панель select, .панель input { padding:6px 10px; font-size:.9rem; border:1px solid #d1d5db;
+                                    border-radius:6px; }
+    .слои { display:flex; gap:12px; font-size:.82rem; align-items:center; }
+    .слои label { flex-direction:row; align-items:center; gap:5px; }
+    #чат { border:1px solid #e5e7eb; border-radius:8px; padding:12px; height:390px;
+           overflow-y:auto; background:#fafafa; }
+    .msg { margin:8px 0; padding:10px 14px; border-radius:8px; white-space:pre-wrap; line-height:1.45;
+           font-size:.92rem; }
+    .от-пользователя { background:#dbeafe; margin-left:14%; }
+    .от-агента { background:#fff; border:1px solid #e5e7eb; margin-right:6%; }
+    .ошибка { background:#fde8e8; color:#9b1c1c; }
+    .системное { background:transparent; color:#6b7280; font-size:.82rem; text-align:center; }
+    .строка-ввода { display:flex; gap:8px; margin-top:12px; }
+    textarea { flex:1; padding:10px; font-size:.95rem; font-family:inherit; border:1px solid #d1d5db;
+               border-radius:8px; resize:vertical; }
+    button { padding:9px 16px; font-size:.92rem; cursor:pointer; border:1px solid #d1d5db;
+             border-radius:8px; background:#fff; }
+    button.главная { background:#2563eb; color:#fff; border-color:#2563eb; }
+    button:disabled { opacity:.5; cursor:default; }
+    .кнопки { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .карточка { border:1px solid #e5e7eb; border-radius:8px; padding:10px 14px; margin-bottom:12px; }
+    .карточка h2 { font-size:.95rem; margin:0 0 6px; display:flex; justify-content:space-between; }
+    .карточка.кратко { border-left:5px solid var(--кратко); }
+    .карточка.рабочая { border-left:5px solid var(--рабочая); }
+    .карточка.долго { border-left:5px solid var(--долго); }
+    .карточка.выключен { opacity:.45; }
+    .счётчик { color:#6b7280; font-weight:normal; font-size:.8rem; }
+    .записи { font-size:.8rem; color:#374151; margin:0; padding-left:16px; }
+    .записи li { margin:2px 0; }
+    .путь { font-family:ui-monospace, monospace; font-size:.72rem; color:#6b7280; margin-top:6px;
+            word-break:break-all; }
+    table { border-collapse:collapse; width:100%; font-size:.8rem; margin-top:6px; }
+    th, td { border:1px solid #e5e7eb; padding:4px 7px; text-align:left; vertical-align:top; }
+    th { background:#f3f4f6; }
+    td.вкл { color:#065f46; } td.выкл { color:#9ca3af; }
+    .бейдж { display:inline-block; padding:1px 7px; border-radius:10px; font-size:.72rem;
+             color:#fff; }
+    .бейдж.краткосрочная { background:var(--кратко); }
+    .бейдж.рабочая { background:var(--рабочая); }
+    .бейдж.долговременная { background:var(--долго); }
+    .бейдж.ядро, .бейдж.запрос { background:var(--ядро); }
+    details { margin-top:14px; border:1px solid #e5e7eb; border-radius:8px; padding:10px 14px; }
+    summary { cursor:pointer; font-weight:600; }
+    code { background:#f4f4f5; padding:1px 4px; border-radius:4px; font-size:.85em; }
+    .мета { color:#6b7280; font-size:.78rem; margin:2px 0 10px 0; }
+    .нарушение { background:#fef3c7; border-left:4px solid #d97706; padding:6px 10px;
+                 border-radius:6px; font-size:.82rem; margin:6px 0; }
+    .соблюдён { background:#ecfdf5; border-left:4px solid #059669; padding:6px 10px;
+                border-radius:6px; font-size:.82rem; margin:6px 0; }
+    .карточка.профиль { border-left:5px solid #7c3aed; }
+    .карточка.сценарии { border-left:5px solid #0891b2; }
+    .карточка.инварианты { border-left:5px solid #b91c1c; }
+    .инвариант { border:1px solid #e5e7eb; border-radius:6px; padding:6px 10px;
+                 margin:6px 0; font-size:.82rem; }
+    .инвариант.личный { border-style:dashed; }
+    .карточка.ворота { border-left:5px solid #7c3aed; }
+    .переход { margin:0 6px 6px 0; }
+    .переход.закрыт { background:#fdf2f8; border-color:#e9d5ff; color:#6b21a8; }
+    .ворота-строка { display:block; font-size:.78rem; color:#4b5563; margin:2px 0; }
+    .ворота-строка.закрыт { color:#9d174d; }
+    .ворота-строка.открыт { color:#166534; }
+    .отчёт { border:1px solid #e5e7eb; border-radius:6px; padding:6px 10px; margin:6px 0; }
+    .отчёт .пункт { font-size:.78rem; display:block; }
+    .отчёт .пункт.не-прошло { color:#b91c1c; }
+    .отчёт .пункт.не-проверено { color:#a16207; }
+    .отказ-перехода { border-left:3px solid #b91c1c; padding-left:8px; margin:4px 0;
+                      font-size:.78rem; color:#4b5563; }
+    .инвариант b { color:#b91c1c; }
+    .инвариант .вид { font-size:.72rem; padding:1px 7px; border-radius:10px;
+                      background:#fef2f2; border:1px solid #fecaca; }
+    .инвариант .подпись { color:#6b7280; font-size:.76rem; display:block; }
+    .отказ { background:#fef2f2; border-left:4px solid #b91c1c; padding:8px 12px;
+             border-radius:6px; white-space:pre-wrap; font-size:.9rem; margin:8px 0; }
+    .поле { display:flex; align-items:center; gap:8px; margin:4px 0; font-size:.82rem; }
+    .поле label { flex:0 0 46%; color:#374151; }
+    .поле select, .поле input[type=text] { flex:1; padding:4px 7px; font-size:.82rem;
+                                           border:1px solid #d1d5db; border-radius:5px; }
+    .замок { font-size:.7rem; color:#7c3aed; }
+    .шаг { border:1px solid #e5e7eb; border-radius:6px; padding:6px 10px; margin:6px 0;
+           font-size:.82rem; }
+    .шаг b { color:#0891b2; }
+    .шаг-правки { border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin:8px 0;
+                  background:#f8fafc; }
+    .шаг-правки textarea { width:100%; min-height:48px; font-size:.82rem; }
+    .вход-список { display:flex; gap:10px; flex-wrap:wrap; font-size:.78rem; margin-top:4px; }
+    .вход-список label { display:flex; align-items:center; gap:4px; }
+    .ряд { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:4px; }
+    .ряд input[type=text] { flex:1; min-width:120px; padding:4px 7px; font-size:.82rem;
+                            border:1px solid #d1d5db; border-radius:5px; }
+    .ряд select { padding:4px 7px; font-size:.82rem; border:1px solid #d1d5db; border-radius:5px; }
+    button.мелкая { padding:3px 9px; font-size:.78rem; }
+    .вопрос-мастера { margin:8px 0; font-size:.84rem; }
+    .вопрос-мастера .подпись { color:#6b7280; font-size:.76rem; }
+    .состояние { display:grid; grid-template-columns: 86px 1fr; gap:2px 8px;
+                 font-size:.84rem; margin:6px 0 8px; }
+    .состояние dt { color:#6b7280; }
+    .состояние dd { margin:0; }
+    .состояние.на-паузе { background:#fff7ed; border-left:4px solid #ea580c;
+                          padding:6px 10px; border-radius:6px; }
+    .лента-шагов { display:flex; gap:4px; flex-wrap:wrap; margin:4px 0; }
+    .лента-шагов span { font-size:.74rem; padding:2px 7px; border-radius:10px;
+                        border:1px solid #e5e7eb; }
+    .лента-шагов .готов { background:#ecfdf5; border-color:#059669; }
+    .лента-шагов .идёт { background:#eff6ff; border-color:#2563eb; font-weight:600; }
+    .шаг.последний { border-color:#7c3aed; background:#faf5ff; }
+    .карточка.mcp { border-left:5px solid #0f766e; }
+    .mcp-сервер { border:1px solid #e5e7eb; border-radius:6px; padding:6px 10px; margin:6px 0;
+                  font-size:.82rem; }
+    .mcp-сервер.ок { border-color:#99f6e4; background:#f0fdfa; }
+    .mcp-сервер.сбой { border-color:#fecaca; background:#fef2f2; }
+    .mcp-сервер.пропущен { border-style:dashed; }
+    .mcp-сервер .куда { font-family:ui-monospace, monospace; font-size:.72rem; color:#6b7280;
+                        word-break:break-all; display:block; }
+    .бейдж.транспорт { background:#0f766e; }
+    .бейдж.не-готов { background:#9ca3af; }
+    .mcp-инструмент { border-top:1px solid #e5e7eb; padding:4px 0; }
+    .mcp-инструмент.закрыт { opacity:.55; }
+    .mcp-инструмент code { font-weight:600; }
+    .доступ { font-size:.7rem; padding:0 6px; border-radius:8px; border:1px solid #d1d5db;
+              color:#374151; white-space:nowrap; }
+    .доступ.только-чтение { border-color:#86efac; color:#166534; }
+    .доступ.может-удалять, .доступ.меняет-данные { border-color:#fca5a5; color:#991b1b; }
+    .mcp-параметры { margin:2px 0 0; padding-left:16px; color:#374151; }
+    .вызов { border-left:3px solid #0ea5e9; background:#f0f9ff; padding:4px 8px; margin:4px 0;
+             font-size:.78rem; font-family:ui-monospace,Menlo,monospace; }
+    .вызов.сбой { border-left-color:#dc2626; background:#fef2f2; }
+    .заявка { border:1px solid #f59e0b; background:#fffbeb; border-radius:6px; padding:6px 8px;
+              margin:6px 0; font-size:.8rem; }
+    .заявка code { font-size:.76rem; }
+    .заявка .кнопки { margin:4px 0 0; }
+    .ответ-вызова { background:#0f172a; color:#e2e8f0; padding:6px; border-radius:4px;
+                    font-size:.72rem; max-height:220px; overflow:auto; white-space:pre-wrap; }
+    .задание { border:1px solid #cbd5e1; border-radius:6px; padding:6px 8px; margin:6px 0;
+               font-size:.8rem; }
+    .задание.снято { opacity:.55; }
+    .задание code { font-size:.76rem; }
+    .пульс { font-size:.78rem; padding:4px 8px; border-radius:6px; margin-bottom:6px; }
+    .пульс.жив { background:#ecfdf5; border:1px solid #10b981; }
+    .пульс.мёртв { background:#fef2f2; border:1px solid #dc2626; }
+    .сводка-текст { background:#f8fafc; border-left:3px solid #6366f1; padding:6px 8px;
+                    margin:6px 0; font-size:.82rem; white-space:pre-wrap; }
+    .напоминание { border-left:3px solid #f59e0b; background:#fffbeb; padding:4px 8px;
+                   margin:4px 0; font-size:.8rem; }
+    pre.схема, pre.журнал { font-size:.7rem; background:#f8fafc; border:1px solid #e5e7eb;
+                            border-radius:4px; padding:6px; overflow-x:auto; max-height:260px; }
+  
+    /* Конвейер: цепочка шагов, где видно, что во что передалось. */
+    .шаг-конвейера { border-left: 3px solid #bcd; padding: 4px 0 4px 8px; margin: 4px 0; }
+    .шаг-конвейера.сбой { border-left-color: #c33; background: #fff5f5; }
+    .шаг-конвейера .стрелка { color: #789; }
+    .шаг-флоу { border-left: 3px solid #9bc; padding: 4px 0 4px 8px; margin: 4px 0; }
+    .шаг-флоу.сбой { border-left-color: #c33; background: #fff5f5; }
+    .передача { font-family: ui-monospace, monospace; font-size: 12px; color: #468; }
+    .прогон-строка { display: flex; gap: 6px; align-items: baseline; }
+    .прогон-строка .состояние { font-weight: 600; }
+    .прогон-строка .сбой { color: #c33; }
+    .отчёт-путь { font-family: ui-monospace, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>Агент миграции ГИС — локальный RAG</h1>
+  {% include "_offline.html" %}
+  <div class="карточка" id="rag-вход" style="margin:6px 0 10px;border-color:#93c5fd;background:#eff6ff">
+    <b>Неделя 6 — локальная модель.</b> Языковая модель работает на этой машине: Ollama на 127.0.0.1,
+    процессор без видеокарты, без ключа API (<a href="/local" id="лок-ссылка-26"><b>Локальная модель →</b></a>).
+    Переключатель «🔒 офлайн» выше переводит всё приложение на локальные модели — каждую роль агента, чат по
+    документам, инструменты MCP; облако и серверы с выходом в интернет заблокированы, журнал сети считает
+    внешние запросы (<a href="/local#офлайн-карточка" id="офлайн-ссылка-27"><b>Офлайн-режим →</b></a>).
+    <b>Новое в Дне 28 — локальный RAG:</b> поиск по индексу документов без LLM (bge-m3, кросс-энкодер на CPU) и
+    ответ локальной модели с цитатами, а рядом — облачная модель на тех же фрагментах и на своём лучшем
+    конвейере; сравнение на 14 вопросах по 3 раза — качество, скорость, стабильность:
+    <a href="/rag" id="rag-ссылка-28"><b>Локальный RAG →</b></a> · чат по документам с памятью задачи:
+    <a href="/chat" id="чат-ссылка-25"><b>Мини-чат →</b></a>
+    <span class="мета" id="rag-сводка"></span>
+    <div class="мета">Ниже — агент с тем, что лекция недели велит применить к локальной модели: инструменты MCP
+    (трекер задач, заявки на изменение) и состояние задачи (стадии, переходы, план, проверка).</div>
+  </div>
+
+  <div class="панель">
+    <label>Модель
+      <select id="модель">
+        <option value="">по роли (планирование/исполнение)</option>
+        {% for м in models %}
+        <option value="{{ м.key }}" data-local="{{ 1 if м.local else 0 }}" data-nokey="{{ 1 if (not м.available and not м.offline_blocked and not м.local) else 0 }}" {% if not м.available %}disabled{% endif %}>
+          {{ м.label }} — {{ м.price_text }}{% if not м.available and not м.offline_blocked %} ({{ "не скачана" if м.local else "нет ключа" }}){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <button id="проверить-модели">Проверить модели</button>
+    <span class="счётчик" id="сводка"></span>
+  </div>
+
+  <div class="раскладка">
+    <div>
+      <div id="чат"></div>
+      <div class="строка-ввода">
+        <textarea id="ввод" rows="2" placeholder="Вопрос агенту…"></textarea>
+        <button id="отправить" class="главная">Спросить</button>
+      </div>
+      <div class="кнопки">
+        <button id="план">Составить план</button>
+        <button id="забыть">Забыть диалог</button>
+        <label title="Описания инструментов уходят в каждый запрос и оплачиваются как вход">
+          <input type="checkbox" id="инструменты-вкл"> Давать инструменты модели
+        </label>
+        <input id="инструменты-серверы" value="tracker" size="16"
+               title="Серверы из mcp-servers.json через запятую; «*» — все готовые">
+        <span class="мета" id="инструменты-итог"></span>
+      </div>
+
+      <div class="карточка" style="margin-top:14px">
+        <h2>Задача <span class="счётчик" id="стадия"></span></h2>
+        <div id="состояние-задачи"></div>
+        <div class="панель" style="margin:0;background:#fff;border:none;padding:0">
+          <label>Задача
+            <select id="задача"><option value="">— нет —</option></select>
+          </label>
+          <label>Новая
+            <input id="новая-задача" placeholder="идентификатор" size="16">
+          </label>
+          <label>Название
+            <input id="название" placeholder="что делаем" size="22">
+          </label>
+          <button id="создать">Завести</button>
+        </div>
+        <div class="кнопки" id="переходы"></div>
+        <div id="ворота"></div>
+        <div class="панель" style="margin:8px 0 0;background:#fff;border:none;padding:0">
+          <button id="утвердить-план">Утвердить план</button>
+          <button id="снять-утверждение" class="мелкая">Снять утверждение</button>
+          <button id="проверить">Проверить (валидация)</button>
+        </div>
+        <div class="панель" style="margin:8px 0 0;background:#fff;border:none;padding:0">
+          <label>Шаг задачи
+            <input id="шаг-ключ" placeholder="ключ" size="14">
+          </label>
+          <label>Значение
+            <input id="шаг-значение" placeholder="что выяснили" size="24">
+          </label>
+          <button id="записать-шаг">В рабочую память</button>
+          <button id="закрыть-шаг">Шаг сделан</button>
+          <button id="завершить">Завершить и свернуть в решение</button>
+        </div>
+      </div>
+
+      <div id="трейс"></div>
+    </div>
+
+    <div>
+      <div id="заявки-панель"></div>
+      <div id="mcp-панель"></div>
+    </div>
+  </div>
+
+  <details>
+    <summary>❓ Справка по форме</summary>
+    <p><b>Неделя 6 — локальная модель.</b> Переключатель «🔒 офлайн» в полосе под заголовком переводит всё
+    приложение на модели этой машины: каждую роль агента — по карте <code>local-roles.json</code>, облачные
+    модели в списках становятся серыми, серверы MCP с выходом в интернет не подключаются, а счётчик рядом
+    показывает внешние запросы — в офлайне их ноль. Локальный RAG и его сравнение с облаком — на странице
+    <code>/rag</code> (карточки «Локальный RAG» и «Сравнение: локально ↔ облако»); установка, CLI и HTTP API
+    Ollama, замер моделей и карта ролей офлайна — на <code>/local</code>; чат по документам — на <code>/chat</code>.
+    В консоли: <code>--офлайн</code>, <code>--rag-локально «…»</code>, <code>--rag-рядом c01</code>,
+    <code>--сравнить-локально</code>.</p>
+
+    <p><b>Модель</b> — «по роли» означает, что на стадии планирования и на остальных стадиях работают разные
+    модели (см. <code>python cli.py --роли</code>; в офлайне — локальные из карты ролей). Явный выбор фиксирует
+    одну. <b>Проверить модели</b> спрашивает у провайдеров, отвечают ли сегодня модели каталога, — запросом в
+    один токен. <b>Забыть диалог</b> очищает историю разговора: на локальной модели длинная история — это и
+    время, и риск ответа по чужим фактам.</p>
+
+    <p><b>Давать инструменты модели</b> — переключатель под полем ввода. Рядом поле с именами
+    серверов через запятую (<code>tracker</code>, <code>*</code> — все готовые). Когда он включён,
+    описания инструментов уходят в каждый запрос к модели — сколько это токенов, написано рядом.
+    Модель не вызывает ничего сама: она просит, агент исполняет вызов и возвращает ей результат, и
+    только потом появляется ответ. Каждый вызов показан отдельной строкой «↳» с аргументами и
+    временем; ошибка инструмента — такая же строка, красная, и модель её тоже видит.</p>
+
+    <p><b>Заявки на изменение.</b> Инструмент с пометкой «меняет данные» по просьбе модели не
+    исполняется: агент записывает заявку, и она ждёт вас в карточке справа — инструмент, аргументы и
+    вопрос, из-за которого она возникла. <b>Подтвердить</b> — вызов произойдёт, <b>Отклонить</b> — вызова
+    не будет вовсе. Кнопка <b>Вызвать</b> у инструмента в панели MCP подтверждения не спрашивает: вызов
+    затеяли вы, а не модель.</p>
+
+    <p><b>MCP</b> — панель справа: серверы из <code>mcp-servers.json</code>, <b>Подключиться</b> проходит
+    рукопожатие и получает список инструментов. Зелёная карточка — соединение установлено, красная — нет
+    (этап и причина), пунктирная — сервер не настроен или в офлайне ходит в интернет. Инструменты
+    раскрываются списком: назначение, параметры, пометка «только чтение / меняет данные», цена схемы в
+    токенах.</p>
+
+    <p><b>Задача</b> — состояние задачи (TaskStates). Стадии идут по кругу
+    <code>planning → execution → validation → done</code>, кнопки показывают все четыре: запертые отмечены
+    замком, и нажатие объясняет, какое условие не выполнено. <b>Составить план</b> просит план у модели,
+    <b>Утвердить план</b> открывает переход к реализации (подпись слетает, если план поправили),
+    <b>Проверить</b> собирает отчёт валидации — чек-лист кодом и вердикт модели-ревизора. Шаги
+    записываются в рабочую память задачи, <b>Завершить</b> сворачивает задачу в решение. Стадию меняет
+    код, а не текст ответа: просьбу агента о переходе (<code>ПЕРЕХОД: execution</code>) он проводит через
+    те же ворота. Пауза и продолжение прогона сценария — в консоли.</p>
+
+    <p><b>Разбор промпта</b> под ответом показывает каждый блок: из какого он слоя, сколько занял токенов
+    и почему включён или пропущен. На локальной модели это цена ответа: каждая сотня токенов промпта —
+    секунды чтения. <b>Отказ</b> появляется в чате красным: запрос, нарушающий инвариант проекта, получает
+    отказ до обращения к модели.</p>
+  </details>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let состояние = null;
+
+const параметры = () => ({
+  tools: инструментыФормы(),
+  model: $('модель').value,
+  task: $('задача').value,
+});
+
+// --- инструменты MCP в разговоре ---------------------------------------------
+// Страница присылает список серверов с каждым вопросом: сервер живёт дольше
+// вкладки, и после его перезапуска переключатель должен снова сработать сам.
+function инструментыФормы() {
+  if (!$('инструменты-вкл').checked) return [];
+  const строка = $('инструменты-серверы').value.trim();
+  return строка ? строка.split(',').map(и => и.trim()).filter(Boolean) : ['*'];
+}
+
+async function обновитьИнструменты() {
+  const итог = $('инструменты-итог');
+  if (!$('инструменты-вкл').checked) {
+    await запрос('/api/tools', {tools: []});
+    итог.textContent = '';
+    return;
+  }
+  итог.textContent = 'подключаюсь…';
+  try {
+    const данные = await запрос('/api/tools', {tools: инструментыФормы()});
+    const с = данные.summary || {};
+    итог.textContent = `${с['инструментов']} инстр. (${с['меняющих']} меняющих), ` +
+                       `схема ≈ ${с['токенов']} ток. в каждом запросе`;
+    (с['недоступны'] || []).forEach(н =>
+      добавить(`MCP: сервер «${н['сервер']}» недоступен — ${н['причина']}`, 'ошибка'));
+  } catch (ошибка) {
+    итог.textContent = '';
+    добавить('Ошибка: ' + ошибка.message, 'ошибка');
+    $('инструменты-вкл').checked = false;
+  }
+}
+
+// Вызовы инструментов показываются отдельными строками, а не внутри ответа:
+// ответ — это слова модели, а вызовы — то, что агент сделал на самом деле.
+function нарисоватьВызовы(ответ) {
+  (ответ['вызовы'] || []).forEach(в => {
+    const аргументы = Object.entries(в['аргументы'] || {})
+      .map(([к, з]) => `${к}=${typeof з === 'string' ? з : JSON.stringify(з)}`).join(', ');
+    const узел = добавить(
+      `↳ ${в['полное_имя']}(${аргументы}) — ` +
+      (в['ок'] ? `${в['секунд']} с` : 'ошибка: ' + (в['текст'] || '').slice(0, 200)),
+      'системное');
+    узел.classList.add('вызов');
+    if (!в['ок']) узел.classList.add('сбой');
+  });
+  if ((ответ['заявки'] || []).length) загрузитьЗаявки();
+  // Маршрут: какие серверы подняли ради этого ответа. Без этой
+  // строки выбор агента остаётся невидимым — человек видит только вызовы.
+  const маршрут = ответ['маршрут'];
+  if (маршрут && (маршрут['серверы'] || []).length) {
+    const узел = добавить('↳ маршрут (' + маршрут['способ'] + '): ' +
+      маршрут['серверы'].join(', '), 'системное');
+    узел.classList.add('вызов');
+  }
+  // Конвейер, выполненный ради этого ответа: модель пишет итог словами, а
+  // какие были шаги и что во что передалось — видно только здесь.
+  const прогон = ответ['прогон'];
+  if (прогон) {
+    const узел = добавить(
+      `↳ конвейер «${прогон['конвейер']}» — ${прогон['состояние']}, ` +
+      `${прогон['сделано']}/${прогон['шагов']} шагов` +
+      (прогон['итог'] ? ': ' + прогон['итог'] : ''), 'системное');
+    узел.classList.add('вызов');
+    if (прогон['состояние'] === 'сбой') узел.classList.add('сбой');
+  }
+}
+
+
+let заявки = [];
+
+async function загрузитьЗаявки() {
+  try {
+    заявки = (await (await fetch('/api/calls')).json()).calls || [];
+  } catch (ошибка) { заявки = []; }
+  нарисоватьЗаявки();
+}
+
+function нарисоватьЗаявки() {
+  const панель = $('заявки-панель');
+  if (!заявки.length) { панель.innerHTML = ''; return; }
+  панель.innerHTML = `<div class="карточка">
+    <h2>Заявки на изменение <span class="счётчик">${заявки.length}</span></h2>
+    <div class="мета">Модель просит изменить данные в чужой системе. Пока вы не подтвердите,
+      вызов не сделан.</div>
+    ${заявки.map(з => `<div class="заявка">
+      <code>${экранировать(з['инструмент'])}</code>
+      <div class="мета">${з['описание'] ? экранировать(з['описание']) : ''}</div>
+      <ul class="mcp-параметры">${Object.entries(з['аргументы'] || {}).map(([к, зн]) =>
+        `<li><code>${экранировать(к)}</code>: ${экранировать(String(зн))}</li>`).join('')}</ul>
+      ${з['зачем'] ? `<div class="мета">из-за вопроса: ${экранировать(з['зачем'].slice(0, 120))}</div>` : ''}
+      <div class="кнопки">
+        <button class="заявка-да" data-номер="${з['номер']}">Подтвердить и выполнить</button>
+        <button class="заявка-нет" data-номер="${з['номер']}">Отклонить</button>
+      </div>
+    </div>`).join('')}
+  </div>`;
+  панель.querySelectorAll('.заявка-да').forEach(к =>
+    к.onclick = () => решитьЗаявку(Number(к.dataset['номер']), 'подтвердить'));
+  панель.querySelectorAll('.заявка-нет').forEach(к =>
+    к.onclick = () => решитьЗаявку(Number(к.dataset['номер']), 'отклонить'));
+}
+
+async function решитьЗаявку(номер, действие) {
+  const почему = действие === 'отклонить'
+    ? (prompt('Почему отклоняете? (необязательно)', '') || '') : '';
+  try {
+    const данные = await запрос('/api/calls', {'номер': номер, 'действие': действие, 'почему': почему});
+    заявки = данные.calls || [];
+    нарисоватьЗаявки();
+    if (данные.result) {
+      const узел = добавить(`✓ Заявка №${номер} исполнена: ${данные.result['полное_имя']}`, 'системное');
+      узел.classList.add('вызов');
+      показатьОтветВызова(данные.result);
+    } else {
+      добавить(`Заявка №${номер} отклонена — вызов не делался.`, 'системное');
+    }
+    if (данные.state) применить(данные.state);
+  } catch (ошибка) {
+    добавить('Ошибка: ' + ошибка.message, 'ошибка');
+    загрузитьЗаявки();
+  }
+}
+
+function показатьОтветВызова(результат) {
+  const узел = document.createElement('pre');
+  узел.className = 'ответ-вызова';
+  узел.textContent = результат['данные'] !== null && результат['данные'] !== undefined
+    ? JSON.stringify(результат['данные'], null, 2)
+    : (результат['текст'] || '');
+  $('чат').appendChild(узел);
+  $('чат').scrollTop = $('чат').scrollHeight;
+}
+
+async function вызватьИнструмент(имя) {
+  const строка = prompt(`Аргументы для ${имя} одной строкой JSON`, '{}');
+  if (строка === null) return;
+  let аргументы;
+  try {
+    аргументы = JSON.parse(строка || '{}');
+  } catch (ошибка) {
+    добавить('Аргументы должны быть JSON: ' + ошибка.message, 'ошибка');
+    return;
+  }
+  const узел = добавить(`↳ ${имя}(${строка}) — вызываю…`, 'системное');
+  узел.classList.add('вызов');
+  try {
+    const данные = await запрос('/api/mcp/call', {tool: имя, args: аргументы});
+    узел.textContent = `↳ ${имя}(${строка}) — ${данные.result['ок'] ? данные.result['секунд'] + ' с' : 'ошибка'}`;
+    if (!данные.result['ок']) узел.classList.add('сбой');
+    показатьОтветВызова(данные.result);
+  } catch (ошибка) {
+    узел.textContent = `↳ ${имя} — ошибка: ${ошибка.message}`;
+    узел.classList.add('сбой');
+  }
+}
+
+function добавить(текст, класс) {
+  const узел = document.createElement('div');
+  узел.className = 'msg ' + класс;
+  узел.textContent = текст;
+  $('чат').appendChild(узел);
+  $('чат').scrollTop = $('чат').scrollHeight;
+  return узел;
+}
+
+async function запрос(адрес, тело) {
+  const ответ = await fetch(адрес, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(тело),
+  });
+  const данные = await ответ.json();
+  if (!ответ.ok) {
+    // Тело ответа едет вместе с ошибкой: отказ в переходе — не сбой, а
+    // содержательный ответ сервера, и показать его надо целиком, вместе с
+    // обновлённым состоянием, где уже видна отклонённая попытка.
+    const сбой = new Error(данные.error || 'ошибка сервера');
+    сбой.данные = данные;
+    throw сбой;
+  }
+  return данные;
+}
+
+function нарисоватьТрейс(ответ) {
+  const строки = ответ.trace.map(б => `
+    <tr>
+      <td>${б['включён'] ? '+' : '−'}</td>
+      <td><span class="бейдж ${б['слой']}">${б['слой']}</span></td>
+      <td>${б['блок']}</td>
+      <td>${б['токенов']}</td>
+      <td>${экранировать(б['почему'])}${б['включён'] && б['записи'].length
+          ? '<br><span class="счётчик">' + б['записи'].slice(0, 4).map(экранировать).join(' · ') + '</span>'
+          : ''}</td>
+    </tr>`).join('');
+
+  const посл = Object.entries(ответ.layers).map(([слой, д]) =>
+    `<span class="бейдж ${слой}">${слой}</span> ${д['записей']} записей, ${д['токенов']} т.`).join(' &nbsp; ');
+
+  let замечания = '';
+  if (ответ.violations.length) {
+    замечания += `<div class="нарушение">Нарушены инварианты (попыток ${ответ.attempts}): ` +
+      ответ.violations.map(н => экранировать(н['правило'] + ' — «' + н['найдено'] + '» в блоке ' + н['где'])).join('; ') + '</div>';
+  } else if (ответ.attempts > 1) {
+    замечания += `<div class="нарушение">Первая попытка нарушила инвариант, исправлено с попытки ${ответ.attempts}` +
+      (ответ.escalated_to ? `, эскалация на ${ответ.escalated_to}` : '') + '.</div>';
+  }
+  if (ответ['применимые'] && ответ['применимые'].length) {
+    замечания += `<p class="мета">Применимые инварианты: ${экранировать(ответ['применимые'].join(', '))}.` +
+      ` Агент назвал сам: ${экранировать((ответ['самоотчёт'] || []).join(', ')) || '—'}.</p>`;
+  }
+  if (ответ['вердикт']) {
+    const в = ответ['вердикт'];
+    const итог = в['сбой'] ? 'проверка не состоялась'
+      : (в['нарушены'].length ? 'нарушены: ' + экранировать(в['нарушены'].join(', ')) : 'чисто');
+    замечания += `<p class="мета">Суждение модели (${экранировать(в['модель'])}): ${итог}.</p>`;
+  }
+  if (ответ.deviations && ответ.deviations.length) {
+    const жёсткие = ответ.deviations.filter(о => о['жёсткое']);
+    замечания += `<div class="нарушение">Расхождения с профилем (${ответ.deviations.length}` +
+      `, попыток ${ответ.attempts}): ` +
+      ответ.deviations.map(о => экранировать(
+        `${о['предпочтение']} — ожидалось ${о['ожидалось']}, в ответе ${о['в_ответе']}` +
+        (о['жёсткое'] ? '' : ' (мягко)'))).join('; ') +
+      (жёсткие.length ? '' : ' — только замечания, ответ не переписывался') + '</div>';
+  } else if (ответ.trace.some(б => б['блок'] === 'настройки пользователя' && б['включён'])) {
+    замечания += '<div class="соблюдён">Профиль соблюдён: расхождений не найдено.</div>';
+  }
+  if (ответ.routing_entry && ответ.routing_entry['слой']) {
+    const р = ответ.routing_entry;
+    замечания += `<p class="мета">Маршрутизатор: ${р['применено'] ? 'записано' : 'не записано'} →
+      ${р['слой']}${р['подслой'] ? '/' + р['подслой'] : ''} — ${экранировать(р['причина'] || '')}</p>`;
+  }
+
+  $('трейс').innerHTML = `
+    <div class="карточка">
+      <h2>Что ушло в промпт <span class="счётчик">стадия: ${ответ.stage || '—'}</span></h2>
+      ${замечания}
+      <table><tr><th></th><th>слой</th><th>блок</th><th>токенов</th><th>почему</th></tr>${строки}</table>
+      <p class="мета">${посл}</p>
+    </div>`;
+}
+
+function экранировать(текст) {
+  const узел = document.createElement('div');
+  узел.textContent = текст === undefined || текст === null ? '' : String(текст);
+  return узел.innerHTML;
+}
+
+function нарисоватьСостояние(с) {
+  // Три части состояния разом: этап, шаг и чего задача ждёт. Без последнего
+  // человек, вернувшийся к отложенной задаче, видит «execution, шаг 3 из 5» и
+  // всё равно не знает, ждут от него чего-то или можно просто продолжать.
+  const т = с.task_state;
+  const узел = $('состояние-задачи');
+  if (!т || !т['есть']) {
+    узел.innerHTML = '<p class="мета">Задача не выбрана.</p>';
+    return;
+  }
+  const лента = (т['шаги'] || []).map(ш =>
+    `<span class="${ш['состояние']}" title="${экранировать(ш['стадия'])}">${ш['номер']}. ${экранировать(ш['имя'])}</span>`
+  ).join('');
+  const ответы = (т['ответы'] || []).map(о =>
+    `<li>на вопрос шага «${экранировать(о['шаг'])}»: ${экранировать(о['ответ']).slice(0, 90)}</li>`
+  ).join('');
+
+  узел.innerHTML = `
+    <dl class="состояние ${т['пауза'] ? 'на-паузе' : ''}">
+      <dt>этап</dt><dd>${экранировать(т['этап'])} (${экранировать(т['этап_словами'])})${
+        т['пауза'] ? ' — <b>на паузе:</b> ' + экранировать(т['причина_паузы']) : ''}</dd>
+      <dt>шаг</dt><dd>${экранировать(т['шаг_словами'])}</dd>
+      <dt>ожидание</dt><dd><b>${экранировать(т['ожидание'])}</b> — ${экранировать(т['ожидание_текст'])}</dd>
+    </dl>
+    ${лента ? `<div class="лента-шагов">${лента}</div>` : ''}
+    ${ответы ? `<p class="мета">Ответы человека:</p><ul class="записи">${ответы}</ul>` : ''}`;
+}
+
+function нарисоватьЗадачу(с) {
+  const выбор = $('задача');
+  const текущая = с.info.task ? с.info.task.task_id : '';
+  выбор.innerHTML = '<option value="">— нет —</option>' +
+    с.tasks.map(з => `<option value="${экранировать(з.task_id)}" ${з.task_id === текущая ? 'selected' : ''}>
+      ${экранировать(з.task_id)} (${з.stage_label})</option>`).join('');
+
+  $('стадия').textContent = с.info.task
+    ? `стадия ${с.info.stage}; дальше: ${с.info.allowed.join(', ') || 'только завершить'}`
+    : 'задача не выбрана';
+
+  // Показываются ВСЕ стадии, а не только разрешённые. Спрятанная кнопка ничему
+  // не учит: человек видит три кнопки вместо четырёх и не знает, почему. Кнопка
+  // с замком объясняет жизненный цикл — и нажать её можно: в ответ придёт
+  // разбор, чего именно не хватает.
+  const переходы = (с.task_state && с.task_state['переходы']) || [];
+  $('переходы').innerHTML = переходы.filter(п => !п['текущая']).map(п => {
+    const подсказка = п['можно'] ? 'переход открыт'
+      : (п['причина'] + (п['чего_не_хватает'] || []).map(н => '; ' + н['видно']).join(''));
+    return `<button class="переход ${п['можно'] ? '' : 'закрыт'}" data-стадия="${п['стадия']}"
+      title="${экранировать(подсказка)}">${п['можно'] ? '→' : '🔒'} ${экранировать(п['словами'])}</button>`;
+  }).join('');
+  document.querySelectorAll('#переходы button').forEach(кнопка => {
+    кнопка.onclick = () => действиеЗадачи({action: 'стадия', stage: кнопка.dataset['стадия']});
+  });
+  нарисоватьВорота(с);
+
+  $('сводка').textContent =
+    `${с.info.model_key} · слои: ${с.info.layers.join(', ') || 'ни одного'} · ` +
+    `вызовов ${с.info.spent.calls}, токенов ${с.info.spent.tokens}`;
+}
+
+function нарисоватьВорота(с) {
+  // Чем открыт следующий этап и что мешает: подпись под планом, отчёт проверки
+  // и журнал отклонённых попыток. Всё это лежит в состоянии задачи и переживает
+  // перезапуск — страница только показывает.
+  const узел = $('ворота');
+  const т = с.task_state;
+  if (!т || !т['есть']) { узел.innerHTML = ''; return; }
+
+  const подпись = т['план_утверждён'] || {};
+  const план = !т['план'] || !т['план'].length
+    ? '<span class="ворота-строка закрыт">плана нет — переход к реализации закрыт</span>'
+    : (т['утверждение_актуально']
+        ? `<span class="ворота-строка открыт">план утверждён: ${экранировать(подпись['кем'] || '')}, ${экранировать((подпись['когда'] || '').slice(0, 16))}, пунктов ${подпись['пунктов'] || 0}</span>`
+        : `<span class="ворота-строка закрыт">план из ${т['план'].length} пунктов не утверждён${
+            подпись['когда'] ? ' (подпись от ' + экранировать(подпись['когда'].slice(0, 16)) + ' устарела: план правили)' : ''}</span>`);
+
+  const отчёт = т['отчёт_валидации'] || {};
+  const пункты = (отчёт['пункты'] || []).map(п => {
+    const класс = п['итог'] === 'прошло' ? '' : (п['итог'] === 'не прошло' ? 'не-прошло' : 'не-проверено');
+    const знак = п['итог'] === 'прошло' ? '✓' : (п['итог'] === 'не прошло' ? '✗' : '?');
+    return `<span class="пункт ${класс}">${знак} ${экранировать(п['пункт'])} — ${экранировать(п['пояснение'])}<span class="счётчик"> ${экранировать(п['кем'] || '')}</span></span>`;
+  }).join('');
+  const проверка = отчёт['вердикт']
+    ? `<div class="отчёт"><b>Проверка: ${экранировать(отчёт['вердикт'])}</b>
+         <span class="счётчик">${экранировать((отчёт['когда'] || '').slice(0, 16))}${
+           т['валидация_актуальна'] ? '' : ' · устарел: работа менялась после проверки'}</span>
+         ${пункты}</div>`
+    : '<span class="ворота-строка закрыт">проверка не проводилась — завершение закрыто</span>';
+
+  const отказы = (т['отказы'] || []).slice(-4).reverse().map(о =>
+    `<div class="отказ-перехода"><b>${экранировать(о['кто'])}</b> просил ${экранировать(о['откуда'])} → ${экранировать(о['куда'])}:
+      ${экранировать(о['причина'])}${(о['невыполненные'] || []).length
+        ? ' (' + экранировать((о['невыполненные'] || []).join(', ')) + ')' : ''}
+      <span class="счётчик">${экранировать((о['когда'] || '').slice(0, 16))}</span></div>`).join('');
+
+  const условия = (т['переходы'] || []).filter(п => !п['текущая'] && !п['можно'] && (п['чего_не_хватает'] || []).length)
+    .map(п => `<span class="ворота-строка закрыт">🔒 ${экранировать(п['словами'])}: ` +
+      экранировать((п['чего_не_хватает'] || []).map(н => н['код'] + ' — ' + н['видно']).join('; ')) + '</span>')
+    .join('');
+
+  узел.innerHTML = план + условия + проверка +
+    (отказы ? `<p class="мета" style="margin:6px 0 2px">Отклонённые попытки перехода:</p>${отказы}` : '');
+}
+
+function применить(с) {
+  состояние = с;
+  нарисоватьЗадачу(с);
+  нарисоватьСостояние(с);
+}
+
+async function действиеЗадачи(тело) {
+  try {
+    const данные = await запрос('/api/task', Object.assign(параметры(), тело));
+    if (данные.decision) {
+      добавить(`Задача свёрнута в решение №${данные.decision.id}: ${данные.decision['заголовок']}`, 'системное');
+    }
+    if (данные.approved) {
+      добавить(`План утверждён: ${данные.approved['кем']}, пунктов ${данные.approved['пунктов']}.`, 'системное');
+    }
+    if (данные.report) {
+      добавить(`Проверка: ${данные.report['вердикт']}, красных пунктов ${данные.report['красных']}.`,
+               данные.report['вердикт'] === 'прошла' ? 'системное' : 'ошибка');
+    }
+    применить(данные.state);
+  } catch (ошибка) {
+    const данные = ошибка.данные || {};
+    if (данные.refusal) {
+      // Отказ в переходе выглядит как отказ по инварианту, и это намеренно: и
+      // то и другое — решение кода, а не сбой, и читать их надо одинаково.
+      добавить(данные.refusal['текст'], 'от-агента').classList.add('отказ');
+      if (данные.state) применить(данные.state);
+      return;
+    }
+    добавить('Ошибка: ' + ошибка.message, 'ошибка');
+  }
+}
+
+// Вопрос агенту потоком (День 27): на локальной модели круг инструментов идёт
+// минуты, и строка ожидания показывает этап, модель, вызов и счётчик токенов.
+async function запросПотоком(адрес, тело, наСобытие) {
+  const ответ = await fetch(адрес, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify(Object.assign({}, тело, {stream: true}))});
+  if (!ответ.ok) {
+    const д = await ответ.json().catch(() => ({}));
+    const ошибка = new Error(д.error || ответ.statusText);
+    ошибка.данные = д;
+    throw ошибка;
+  }
+  const чтец = ответ.body.getReader();
+  const декодер = new TextDecoder();
+  let буфер = '';
+  for (;;) {
+    const {done, value} = await чтец.read();
+    if (done) break;
+    буфер += декодер.decode(value, {stream: true});
+    let i;
+    while ((i = буфер.indexOf('\n')) >= 0) {
+      const строка = буфер.slice(0, i).trim();
+      буфер = буфер.slice(i + 1);
+      if (!строка) continue;
+      const с = JSON.parse(строка);
+      if (с['событие'] === 'готово') return с;
+      if (с['событие'] === 'ошибка') throw new Error(с.error);
+      наСобытие(с);
+    }
+  }
+  throw new Error('ответ оборвался без итога');
+}
+
+async function спросить(адрес, вопрос) {
+  $('отправить').disabled = true;
+  const ожидание = добавить('…', 'системное');
+  ожидание.id = 'ход-агента';
+  const начало = Date.now();
+  const ход = {этапы: [], токены: null};
+  const показать = () => {
+    const сек = Math.round((Date.now() - начало) / 1000);
+    const э = ход.этапы[ход.этапы.length - 1];
+    const пишет = ход.токены && ход.токены['выход'] ? ` · пишет: ${ход.токены['выход']} ток.` : '';
+    ожидание.textContent = `… ${сек} с` + (ход.этапы.length ? ' · ' + ход.этапы.map(х => х.текст).join(' → ') : '') + пишет;
+  };
+  const таймер = setInterval(показать, 500);
+  try {
+    const данные = адрес === '/api/ask'
+      ? await запросПотоком(адрес, Object.assign(параметры(), {question: вопрос}), с => {
+          if (с['событие'] === 'этап' && с['этап'] !== 'начало') {
+            ход.этапы.push({текст: с['этап'] === 'инструмент' ? `вызов ${с['инструмент']}`
+              : `${с['этап']}${с['модель'] ? ' · ' + с['модель'] + (с['локально'] ? ' (локально)' : '') : ''}`});
+            ход.токены = null;
+          } else if (с['событие'] === 'токены') {
+            ход.токены = с;
+          }
+          показать();
+        })
+      : await запрос(адрес, Object.assign(параметры(), {question: вопрос}));
+    clearInterval(таймер);
+    ожидание.remove();
+    if (данные.answer.refusal && данные.answer.refusal['есть']) {
+    // Отказ — не ошибка и не обычный ответ: это решение проекта, и выглядеть
+    // он должен иначе, чтобы его не приняли за сбой.
+    const узел = добавить(данные.answer.refusal['текст'], 'от-агента');
+    узел.classList.add('отказ');
+  } else {
+    добавить(данные.answer.text, 'от-агента');
+  }
+    const р = данные.answer.usage || {};
+    // У отказа до вызова расхода нет вовсе — печатать «undefined токенов»
+    // значит выдать отсутствие трат за сбой.
+    if (р.model_key) {
+      добавить(`${р.model_key}: ${р.total_tokens} токенов, ${р.elapsed} с`, 'системное');
+    } else {
+      добавить('Модель не вызывалась — отказ по инварианту.', 'системное');
+    }
+    нарисоватьВызовы(данные.answer);
+    нарисоватьТрейс(данные.answer);
+    применить(данные.state);
+  } catch (ошибка) {
+    clearInterval(таймер);
+    ожидание.remove();
+    добавить('Ошибка: ' + ошибка.message, 'ошибка');
+    if (ошибка.данные && ошибка.данные.state) применить(ошибка.данные.state);
+  } finally {
+    $('отправить').disabled = false;
+  }
+}
+
+$('отправить').onclick = async () => {
+  const вопрос = $('ввод').value.trim();
+  if (!вопрос) return;
+  добавить(вопрос, 'от-пользователя');
+  $('ввод').value = '';
+  спросить('/api/ask', вопрос);
+};
+
+$('ввод').addEventListener('keydown', (событие) => {
+  if (событие.key === 'Enter' && !событие.shiftKey) { событие.preventDefault(); $('отправить').click(); }
+});
+
+$('план').onclick = async () => {
+  добавить('Составить план задачи', 'от-пользователя');
+  спросить('/api/plan', '');
+};
+
+$('забыть').onclick = async () => {
+  const данные = await запрос('/api/forget', {});
+  $('чат').innerHTML = '';
+  добавить(`Краткосрочная память очищена: реплик стёрто ${данные.cleared}. ` +
+           'Рабочая и долговременная не тронуты.', 'системное');
+  применить(данные.state);
+};
+
+$('создать').onclick = () => действиеЗадачи({
+  action: 'создать',
+  task_id: $('новая-задача').value.trim(),
+  title: $('название').value.trim(),
+});
+
+$('задача').onchange = () => действиеЗадачи({
+  action: $('задача').value ? 'взять' : 'отпустить',
+  task_id: $('задача').value,
+});
+
+$('записать-шаг').onclick = () => действиеЗадачи({
+  action: 'шаг', key: $('шаг-ключ').value.trim(), value: $('шаг-значение').value.trim(),
+});
+
+$('завершить').onclick = () => действиеЗадачи({action: 'завершить'});
+$('закрыть-шаг').onclick = () => действиеЗадачи({
+  action: 'закрыть-шаг', value: $('шаг-значение').value.trim()});
+$('утвердить-план').onclick = () => действиеЗадачи({action: 'утвердить-план'});
+$('снять-утверждение').onclick = () => действиеЗадачи({action: 'снять-утверждение'});
+$('проверить').onclick = () => действиеЗадачи({action: 'валидация'});
+
+$('проверить-модели').onclick = async () => {
+  $('проверить-модели').disabled = true;
+  добавить('Проверяю модели каталога — запрос в один токен на каждую…', 'системное');
+  try {
+    const ответ = await fetch('/api/verify');
+    const данные = await ответ.json();
+    const строки = данные.models.map(м =>
+      `${м['key']} (${м['api_id']}): ${м['status']}`).join('\n');
+    добавить(строки, 'системное');
+  } catch (ошибка) {
+    добавить('Ошибка: ' + ошибка.message, 'ошибка');
+  } finally {
+    $('проверить-модели').disabled = false;
+  }
+};
+
+// --- MCP -------------------------------------------------------------------------
+let mcpСерверы = [], mcpПуть = '', mcpОшибка = '';
+const mcpОсмотры = {};
+const mcpИдёт = new Set();
+// Списки инструментов свёрнуты: у пяти серверов их под сорок, и раскрытые они
+// уводят панели инвариантов и условий далеко вниз. Какие раскрыл человек —
+// помнится, иначе каждое «Подключиться» сворачивало бы их обратно.
+const mcpРаскрыты = new Set();
+
+async function загрузитьMCP() {
+  try {
+    const ответ = await fetch('/api/mcp');
+    const данные = await ответ.json();
+    if (!ответ.ok) throw new Error(данные.error || 'ошибка сервера');
+    mcpСерверы = данные.servers;
+    mcpПуть = данные.path;
+    mcpОшибка = '';
+  } catch (ошибка) {
+    mcpОшибка = ошибка.message;
+  }
+  нарисоватьMCP();
+}
+
+async function осмотретьMCP(имя) {
+  const имена = имя ? [имя] : mcpСерверы.map(с => с['имя']);
+  имена.forEach(и => mcpИдёт.add(и));
+  нарисоватьMCP();
+  try {
+    const данные = await запрос('/api/mcp/inspect', {server: имя || ''});
+    данные.inspections.forEach(о => { mcpОсмотры[о['сервер']['имя']] = о; });
+    const с = данные.summary;
+    добавить(`MCP: подключено ${с['подключено']} из ${с['серверов']}` +
+             (с['пропущено'] ? `, пропущено ${с['пропущено']}` : '') +
+             (с['сбоев'] ? `, сбоев ${с['сбоев']}` : '') +
+             `. Инструментов ${с['инструментов']}, разрешено ${с['разрешено']}, ` +
+             `их схема ≈ ${с['токенов']} ток. на каждый запрос к модели.`, 'системное');
+  } catch (ошибка) {
+    добавить('Ошибка MCP: ' + ошибка.message, 'ошибка');
+  } finally {
+    имена.forEach(и => mcpИдёт.delete(и));
+    нарисоватьMCP();
+  }
+}
+
+// «1,4 с», как в консоли: одна цифра после запятой, по-русски.
+function секундыMCP(с) {
+  return Number(с).toFixed(1).replace('.', ',') + ' с';
+}
+
+function нарисоватьИнструментMCP(и) {
+  const класс = и['доступ'].replace(/ /g, '-');
+  const параметры = и['параметры'].length
+    ? '<ul class="mcp-параметры">' + и['параметры'].map(п =>
+        `<li><code>${экранировать(п['имя'])}${п['обязательный'] ? '*' : ''}</code> ` +
+        `(${экранировать(п['тип'])})${п['описание'] ? ' — ' + экранировать(п['описание']) : ''}</li>`
+      ).join('') + '</ul>'
+    : '<div class="мета" style="margin:2px 0">без параметров</div>';
+  return `<div class="mcp-инструмент ${и['разрешён'] ? '' : 'закрыт'}" data-инструмент="${экранировать(и['имя'])}">
+    <code>${экранировать(и['имя'])}</code>${и['заголовок'] && и['заголовок'] !== и['имя'] ? ' — ' + экранировать(и['заголовок']) : ''}
+    <span class="доступ ${класс}">${экранировать(и['доступ'])}</span>
+    ${и['разрешён'] ? '' : `<span class="доступ">закрыт: ${экранировать(и['почему_закрыт'])}</span>`}
+    <span class="счётчик">≈ ${и['токенов']} ток.</span>
+    ${и['описание'] ? `<div class="мета" style="margin:2px 0">${экранировать(и['описание'])}</div>` : ''}
+    ${параметры}
+    ${и['разрешён'] ? `<div class="кнопки" style="margin:2px 0 0">
+      <button class="mcp-вызвать" data-вызвать="${экранировать(и['полное_имя'])}">Вызвать</button></div>` : ''}
+    <details style="margin-top:2px;padding:2px 6px"><summary style="font-weight:normal;font-size:.74rem">JSON-схема входа</summary>
+      <pre class="схема">${экранировать(JSON.stringify(и['входная_схема'], null, 2))}</pre></details>
+  </div>`;
+}
+
+function нарисоватьСерверMCP(с) {
+  const о = mcpОсмотры[с['имя']];
+  const идёт = mcpИдёт.has(с['имя']);
+  let класс = '', тело = '';
+  if (идёт) {
+    тело = '<div class="мета">Подключаюсь…</div>';
+  } else if (о && о['пропущен']) {
+    класс = 'пропущен';
+    тело = `<div class="нарушение">Пропущен: ${экранировать(о['ошибка'])}</div>`;
+  } else if (о && !о['ок']) {
+    класс = 'сбой';
+    тело = `<div class="нарушение">Соединение не установлено (этап «${экранировать(о['этап'])}»): ` +
+           `${экранировать(о['ошибка'])}${о['подсказка'] ? '<br>Подсказка: ' + экранировать(о['подсказка']) : ''}</div>` +
+           (о['журнал'] ? `<pre class="журнал">${экранировать(о['журнал'])}</pre>` : '');
+  } else if (о) {
+    класс = 'ок';
+    const р = о['рукопожатие'];
+    const закрыто = о['всего_инструментов'] - о['разрешено'];
+    тело = `<div class="соблюдён">Соединение установлено за ${секундыMCP(о['подключение_с'])} · ` +
+           `рукопожатие ${экранировать(р['способ'])} · протокол ${экранировать(р['протокол'])}<br>` +
+           `Сервер: ${экранировать([р['имя'], р['версия']].filter(Boolean).join(' ') || 'не назвался')}` +
+           `${р['заголовок'] ? ' («' + экранировать(р['заголовок']) + '»)' : ''} · ` +
+           `умеет: ${экранировать(р['возможности'].join(', ') || '—')}</div>` +
+           `<details class="mcp-список" data-список="${экранировать(с['имя'])}" ` +
+           `${mcpРаскрыты.has(с['имя']) ? 'open' : ''} style="margin-top:4px;padding:4px 8px">` +
+           `<summary style="font-size:.8rem">` +
+           `Инструменты: ${о['всего_инструментов']}` +
+           (закрыто ? ` (разрешено ${о['разрешено']}, закрыто ${закрыто})` : '') +
+           ` · схема ≈ ${о['токенов']} ток.</summary>` +
+           о['инструменты'].map(нарисоватьИнструментMCP).join('') + '</details>';
+  } else if (!с['готов']) {
+    класс = 'пропущен';
+    тело = `<div class="мета">Не готов: ${экранировать(с['почему_не_готов'])}</div>`;
+  }
+  const фильтр = [
+    с['разрешить'].length ? 'разрешить ' + с['разрешить'].join(', ') : '',
+    с['запретить'].length ? 'запретить ' + с['запретить'].join(', ') : '',
+  ].filter(Boolean).join('; ');
+  return `<div class="mcp-сервер ${класс}" data-сервер="${экранировать(с['имя'])}">
+    <div class="ряд"><b>${экранировать(с['имя'])}</b>
+      <span class="бейдж транспорт">${экранировать(с['транспорт'])}</span>
+      ${с['готов'] ? '' : '<span class="бейдж не-готов">не готов</span>'}
+      <button class="мелкая mcp-подключить" data-mcp="${экранировать(с['имя'])}" ${идёт ? 'disabled' : ''}>Подключиться</button>
+    </div>
+    <span class="куда">${экранировать(с['куда'])}</span>
+    ${с['описание'] ? `<div class="мета" style="margin:2px 0">${экранировать(с['описание'])}</div>` : ''}
+    ${фильтр ? `<div class="мета" style="margin:2px 0">фильтр: ${экранировать(фильтр)}</div>` : ''}
+    ${тело}
+  </div>`;
+}
+
+function нарисоватьMCP() {
+  const панель = $('mcp-панель');
+  if (mcpОшибка) {
+    панель.innerHTML = `<div class="карточка mcp"><h2>MCP-серверы</h2>
+      <div class="нарушение">${экранировать(mcpОшибка)}</div></div>`;
+    return;
+  }
+  const идёт = mcpИдёт.size > 0;
+  панель.innerHTML = `<div class="карточка mcp">
+    <h2>MCP-серверы <span class="счётчик">${mcpСерверы.length}</span></h2>
+    <div class="мета">из <code>${экранировать(mcpПуть)}</code></div>
+    <div class="кнопки" style="margin:0 0 4px">
+      <button id="mcp-все" ${идёт || !mcpСерверы.length ? 'disabled' : ''}>Подключиться ко всем</button>
+    </div>
+    ${mcpСерверы.length ? mcpСерверы.map(нарисоватьСерверMCP).join('')
+      : '<div class="мета">Серверов нет — опишите их в mcp-servers.json.</div>'}
+  </div>`;
+  const все = $('mcp-все');
+  if (все) все.onclick = () => осмотретьMCP('');
+  панель.querySelectorAll('.mcp-подключить').forEach(к => {
+    к.onclick = () => осмотретьMCP(к.dataset.mcp);
+  });
+  панель.querySelectorAll('.mcp-вызвать').forEach(к => {
+    к.onclick = () => вызватьИнструмент(к.dataset['вызвать']);
+  });
+  панель.querySelectorAll('.mcp-список').forEach(д => {
+    д.addEventListener('toggle', () => {
+      if (д.open) mcpРаскрыты.add(д.dataset['список']); else mcpРаскрыты.delete(д.dataset['список']);
+    });
+  });
+}
+
+$('инструменты-вкл').onchange = обновитьИнструменты;
+$('инструменты-серверы').onchange = () => {
+  if ($('инструменты-вкл').checked) обновитьИнструменты();
+};
+
+загрузитьMCP();
+загрузитьЗаявки();
+fetch('/api/rag').then(о => о.json()).then(с => {
+  const место = document.getElementById('rag-сводка');
+  if (!место) return;
+  место.textContent = с.индексы.length
+    ? ' · собрано: ' + с.индексы.map(и => `«${и.стратегия}» ${и.чанков} чанков`).join(', ') + ` (${с.индексы[0].эмбеддер})`
+    : ' · индекс ещё не собран';
+}).catch(() => {});
+(async () => {
+  const ответ = await fetch('/api/state');
+  const с = await ответ.json();
+  применить(с);
+  с.dialog.forEach(м => добавить(м.content, м.role === 'user' ? 'от-пользователя' : 'от-агента'));
+  if (с.dialog.length) добавить('— выше восстановленный диалог из краткосрочной памяти —', 'системное');
+})();
+</script>
+</body>
+</html>

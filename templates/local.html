@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Локальная модель: Ollama на этой машине</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1360px; margin: 20px auto; padding: 0 16px;
+           color:#111827; background:#fff; }
+    h1 { margin-bottom: 2px; font-size: 1.4rem; }
+    h2 { font-size: 1.02rem; margin: 0 0 8px; }
+    a { color:#2563eb; }
+    .idea { color:#4b5563; font-size:.86rem; margin-top:2px; line-height:1.45; }
+    .карточка { border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; margin:12px 0; background:#fff; }
+    .ряд { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    label { display:flex; flex-direction:column; font-size:.78rem; color:#374151; gap:3px; }
+    label.флажок { flex-direction:row; align-items:center; gap:5px; }
+    input, select, textarea { padding:6px 9px; font-size:.9rem; border:1px solid #d1d5db; border-radius:6px;
+                              font-family:inherit; }
+    button { padding:7px 14px; font-size:.9rem; border:1px solid #9ca3af; border-radius:6px;
+             background:#f9fafb; cursor:pointer; }
+    button.главная { background:#2563eb; color:#fff; border-color:#1d4ed8; }
+    button.мелкая { padding:3px 9px; font-size:.8rem; }
+    button:disabled { opacity:.5; cursor:default; }
+    .мета { color:#6b7280; font-size:.78rem; }
+    code { font-size:.76rem; background:#f3f4f6; padding:1px 4px; border-radius:3px; }
+    pre { background:#0f172a; color:#e2e8f0; padding:9px 11px; border-radius:6px; font-size:.76rem;
+          max-height:340px; overflow:auto; white-space:pre-wrap; word-break:break-word; margin:6px 0; }
+    table { border-collapse:collapse; width:100%; font-size:.82rem; }
+    th, td { border-bottom:1px solid #e5e7eb; padding:5px 7px; text-align:left; vertical-align:top; }
+    th { background:#f9fafb; font-weight:600; }
+    td.ч { text-align:right; font-variant-numeric: tabular-nums; }
+    .ошибка { background:#fde8e8; color:#9b1c1c; padding:6px 10px; border-radius:6px; font-size:.84rem; }
+    details summary { cursor:pointer; font-weight:600; font-size:.9rem; }
+    .справка { font-size:.84rem; line-height:1.5; color:#374151; }
+    .плашка { display:inline-block; padding:2px 9px; border-radius:10px; font-size:.78rem; margin-right:6px; }
+    .плашка.ок { background:#ecfdf5; border:1px solid #10b981; color:#065f46; }
+    .плашка.нет { background:#fef2f2; border:1px solid #dc2626; color:#991b1b; }
+    .плашка.инфо { background:#eff6ff; border:1px solid #93c5fd; color:#1e40af; }
+    .ответы { display:grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap:12px; margin-top:10px; }
+    .ответ { border:1px solid #e5e7eb; border-radius:8px; padding:9px 12px; }
+    .ответ.локально { border-top:4px solid #059669; }
+    .ответ.облако { border-top:4px solid #7c3aed; }
+    .ответ .кто { font-weight:600; font-size:.88rem; }
+    .ответ .текст { white-space:pre-wrap; font-size:.92rem; line-height:1.5; margin:6px 0; min-height:2.5em; }
+    .ответ .мысли { white-space:pre-wrap; font-size:.78rem; color:#6b7280; border-left:3px solid #d1d5db;
+                    padding-left:8px; margin:4px 0; max-height:120px; overflow:auto; }
+    .ответ .замеры { font-size:.78rem; color:#374151; background:#f9fafb; border-radius:5px; padding:4px 7px; }
+    .курсор::after { content:'▍'; color:#059669; animation: мигание 1s steps(1) infinite; }
+    @keyframes мигание { 50% { opacity:0; } }
+    .ок { color:#047857; } .нет { color:#b91c1c; }
+    .ход { height:10px; background:#e5e7eb; border-radius:5px; overflow:hidden; margin:6px 0 2px; }
+    .ход > div { height:100%; background:#2563eb; width:0; transition: width .3s; }
+    .отметки button { padding:1px 7px; font-size:.82rem; }
+    .отметки button.выбрана { background:#fef9c3; border-color:#ca8a04; }
+    .выбор { background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:6px 10px; margin:8px 0; font-size:.86rem; }
+    .опт-часть { margin-top:10px; padding-top:8px; border-top:1px dashed #e5e7eb; }
+    .опт-часть h3 { font-size:.92rem; margin:0 0 6px; }
+    .ответ.до { border-top:4px solid #9ca3af; }
+    .ответ.после { border-top:4px solid #059669; }
+    tr.взят td:first-child::before { content:'✓ '; color:#047857; }
+    tr.серверный td:first-child::before { content:'⚙ '; color:#1d4ed8; }
+    tr.отклонён td { color:#6b7280; }
+    .лучше { color:#047857; font-weight:600; } .хуже { color:#b91c1c; }
+  </style>
+</head>
+<body>
+  <h1>Локальная модель: Ollama на этой машине</h1>
+  {% include "_offline.html" %}
+  <div class="мета"><a href="/">← главная</a> · <a href="/chat">мини-чат</a> · <a href="/rag">RAG</a></div>
+  <p class="idea" id="день-29">
+    <b>День 29 — оптимизация под задачу.</b> Локальная модель настроена под ответ по договорам с цитатами:
+    параметры вызова (температура, предел ответа, окно контекста, потоки, пакет, штраф за повтор), квантование
+    (Q4_K_M, Q8_0, MTP, BF16), короткий шаблон промпта «договоры» и параметры сервера Ollama (второй сервер —
+    служба не трогается). Каждый рычаг замерен отдельно на трёх вопросах, «до» и «после» — на четырнадцати:
+    качество (проверка кодом и судья), время по слоям, память раннера и секунды процессора. Шаблон «договоры»
+    прошёл скрининг, но на вопросе о двух договорах сразу отвечал «не знаю» — в «после» он не вошёл. Итог — своя
+    модель <code>loc-rag-docs</code> из <code>Modelfile.rag-docs</code>; отчёт — <code>OPTIMIZE.md</code>.
+  </p>
+  <p class="idea" id="неделя-6">
+    <b>Неделя 6 — локальная модель.</b> Языковая модель работает <b>на этом компьютере</b> — Ollama на
+    петлевом адресе <code>127.0.0.1:11434</code>, ноутбучный процессор (2 ядра, 4 потока) без видеокарты; ключа
+    API нет, запрос не покидает машину. Ниже — доказательства из самой Ollama (служба, скачанные модели,
+    модель в памяти и где она считается), три способа обратиться к модели (<b>CLI</b> <code>ollama run</code>,
+    родной <b>HTTP API</b> и OpenAI-совместимый <code>/v1</code>), вопрос с переключателем «локально / облако /
+    оба рядом» и замер моделей на запросах трёх уровней сложности. Карточка «Офлайн-режим» — как приложение
+    работает без облака: модель на каждой роли агента, поиск в документах (кросс-энкодер на CPU), серверы MCP
+    и журнал сети — в офлайне внешних запросов ноль. Локальный RAG рядом с облаком — на странице
+    <a href="/rag">RAG</a>.
+  </p>
+
+  <div class="карточка" id="опт-карточка">
+    <div class="ряд" style="justify-content:space-between">
+      <h2 style="margin:0">Оптимизация под задачу <span class="мета">День 29 · ответ по договорам · конфигурации <code>local-opt.json</code></span></h2>
+      <span><button class="мелкая" id="опт-обновить">Обновить</button></span>
+    </div>
+    <div id="опт-сводка">Загрузка…</div>
+    <div class="опт-часть">
+      <h3>Конфигурации <span class="мета">«до» — как в Дне 28; рычаг меняет одну вещь; «после» собирается по скринингу</span></h3>
+      <div id="опт-конфигурации"></div>
+    </div>
+    <div class="опт-часть">
+      <h3>Второй сервер Ollama <span class="мета">свой <code>ollama serve</code> на 127.0.0.1:11435 со своими переменными; служба не трогается</span></h3>
+      <div class="ряд">
+        <label style="min-width:380px">Переменные
+          <input id="опт-переменные" value="OLLAMA_FLASH_ATTENTION=1,OLLAMA_KV_CACHE_TYPE=q8_0"></label>
+        <button id="опт-сервер-старт">Запустить</button>
+        <button id="опт-сервер-стоп">Остановить</button>
+        <span id="опт-сервер" class="мета"></span>
+      </div>
+    </div>
+    <div class="опт-часть">
+      <h3>Вопрос в двух конфигурациях <span class="мета">один поиск — две модели подряд: загрузка, ответ, память и процессор каждой</span></h3>
+      <div class="ряд">
+        <label style="flex:1;min-width:300px">Вопрос из набора
+          <select id="опт-вопрос"></select></label>
+        <label style="flex:1;min-width:260px">или свой
+          <input id="опт-свой" placeholder="например: какая неустойка за просрочку оплаты по договору VPN?"></label>
+        <label>Слева <select id="опт-а"></select></label>
+        <label>Справа <select id="опт-б"></select></label>
+        <button class="главная" id="опт-рядом">Ответить в обеих</button>
+      </div>
+      <div class="ответы" id="опт-ответы"></div>
+    </div>
+    <div class="опт-часть">
+      <h3>Прогоны <span class="мета">скрининг — рычаги на 3 вопросах; качество — «до», «после», «после-q8» на 14; судья ds-pro</span></h3>
+      <div class="ряд">
+        <button id="опт-скрининг">Скрининг</button>
+        <button id="опт-микро" title="скорость чистых рычагов: короткий промпт, 5 раундов «каруселью»">Микрозамер скорости</button>
+        <button id="опт-качество">Прогон качества</button>
+        <button id="опт-стоп">Остановить</button>
+        <button id="опт-модель" title="правило D-05 по скринингу → Modelfile.rag-docs → ollama create loc-rag-docs; карта ролей">Собрать «после» и создать модель</button>
+        <button id="опт-отчёт">Пересобрать отчёт</button>
+      </div>
+      <div class="ход" id="опт-ход-полоса"><div></div></div>
+      <div id="опт-ход" class="мета"></div>
+      <div id="опт-итоги"></div>
+    </div>
+  </div>
+
+  <div class="карточка" id="ollama-карточка">
+    <div class="ряд" style="justify-content:space-between">
+      <h2 style="margin:0">Ollama на этой машине</h2>
+      <span><button class="мелкая" id="обновить">Обновить</button></span>
+    </div>
+    <div id="ollama">Загрузка…</div>
+  </div>
+
+  <div class="карточка" id="офлайн-карточка">
+    <div class="ряд" style="justify-content:space-between">
+      <h2 style="margin:0">Офлайн-режим <span class="мета">День 27 · всё приложение на локальных моделях — карта ролей <code>local-roles.json</code></span></h2>
+      <span><button class="мелкая" id="офлайн-сбросить" title="обнулить счётчики журнала сети">Сбросить журнал сети</button></span>
+    </div>
+    <div id="офлайн-карта">Загрузка…</div>
+  </div>
+
+  <div class="карточка" id="спросить-карточка">
+    <h2>Спросить <span class="мета">ответ потоком; время до первого токена и скорость считает страница</span></h2>
+    <div class="ряд">
+      <label style="flex:1;min-width:320px">Вопрос
+        <textarea id="лок-вопрос" rows="2" placeholder="Например: Какая столица Франции? Ответь одним словом."></textarea>
+      </label>
+    </div>
+    <div class="ряд" style="margin-top:6px">
+      <label>Где отвечать
+        <select id="лок-режим">
+          <option value="local">локально</option>
+          <option value="cloud" data-облако="1">облако</option>
+          <option value="both" data-облако="1" selected>оба рядом</option>
+        </select>
+      </label>
+      <label>Локальная модель
+        <select id="лок-модель">
+          {% for м in models if м.local %}<option value="{{ м.key }}" {% if м.key == main %}selected{% endif %} {% if not м.available %}disabled{% endif %}>{{ м.label }}{% if not м.available %} (не скачана){% endif %}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Облачная модель
+        <select id="облако-модель">
+          {% for м in models if not м.local %}<option value="{{ м.key }}" {% if м.key == cloud %}selected{% endif %} data-local="0" data-nokey="{{ 1 if (not м.available and not м.offline_blocked) else 0 }}" {% if not м.available %}disabled{% endif %}>{{ м.label }}{% if not м.available and not м.offline_blocked %} (нет ключа){% endif %}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="флажок" title="та же системная подсказка, что в замере: отвечай коротко, число — только числом"><input type="checkbox" id="лок-коротко" checked> как в замере: просить коротко</label>
+      <label class="флажок"><input type="checkbox" id="лок-думать"> размышления (think)</label>
+      <button class="главная" id="лок-спросить">Спросить</button>
+    </div>
+    <div class="ряд" style="margin-top:6px" id="примеры"></div>
+    <div class="ответы" id="лок-ответы"></div>
+  </div>
+
+  <div class="карточка" id="доступ-карточка">
+    <h2>CLI и HTTP API <span class="мета">тот же вопрос — командой ollama и сырым HTTP-запросом</span></h2>
+    <div class="ряд">
+      <label style="flex:1;min-width:320px">Вопрос
+        <input id="доступ-вопрос" value="Сколько будет 17 умножить на 23? Ответь только числом.">
+      </label>
+      <button id="через-cli">CLI: ollama run</button>
+      <button id="через-native">HTTP: /api/chat</button>
+      <button id="через-openai">HTTP: /v1/chat/completions</button>
+    </div>
+    <div id="доступ"></div>
+  </div>
+
+  <div class="карточка" id="бенч-карточка">
+    <h2>Запросы разной сложности <span class="мета">три уровня по две задачи из local-tasks.json; проверка кодом</span></h2>
+    <div class="ряд">
+      <label class="флажок"><input type="checkbox" id="бенч-облако" checked> и облачная модель для сравнения</label>
+      <button class="главная" id="бенч-запустить">Прогнать все модели</button>
+      <span class="мета">каждой скачанной локальной модели (и облаку) — одни и те же запросы; итог — и в LOCAL-BENCH.md</span>
+    </div>
+    <div id="бенч-ход"></div>
+    <div id="бенч"></div>
+  </div>
+
+  <details class="карточка">
+    <summary>❓ Справка по форме</summary>
+    <div class="справка">
+      <p><b>Оптимизация под задачу (День 29).</b> Конфигурация — модель, её веса в Ollama (квант), опции вызова,
+        шаблон промпта и сервер; все — в <code>local-opt.json</code>. «Скрининг» прогоняет каждый рычаг на трёх
+        вопросах (c01, c02 и расплывчатый v1): модель грузится отдельным запросом, отвечает, страница снимает
+        память раннера и секунды процессора, потом модель выгружается — так в каждом ответе промпт читается заново.
+        Конфигурации у разных вопросов идут в разном порядке, нагрузка машины пишется в каждый ответ. «Собрать
+        «после»» берёт рычаги, которые дали выигрыш от 5 % по времени или памяти без потери качества, складывает их
+        и создаёт свою модель <code>loc-rag-docs</code>; серверные рычаги (KV-кэш, flash attention) идут
+        рекомендацией для службы. «Прогон качества» сравнивает «до», «после» и «после» на Q8_0 на 14 вопросах.
+        «Вопрос в двух конфигурациях» — то же на одном вопросе вживую. Во время прогона ответ «рядом» не
+        запускается: две 4B-модели не помещаются в память, а замеры сбились бы.</p>
+      <p><b>Ollama на этой машине.</b> Версия и адрес из <code>GET /api/version</code>; «петлевой адрес» —
+        запросы идут на 127.0.0.1 и не выходят с компьютера. Скачанные модели — <code>GET /api/tags</code>:
+        размер файла весов, число параметров, квантование (Q4_K_M — 4 бита на вес). «В памяти» — <code>GET
+        /api/ps</code>: какая модель загружена, сколько занимает и где считается («100% CPU» — видеокарты нет).
+        Ссылки «сырой JSON» открывают ответ самой Ollama в браузере.</p>
+      <p><b>Спросить.</b> «локально» — модель на этой машине, «облако» — облачный провайдер, «оба рядом» — обе
+        одновременно. Под ответом: время до первого токена (что человек ждёт перед пустым экраном), всё время,
+        токены в секунду, токены входа и выхода, цена. У локальной ещё замеры самой Ollama: загрузка весов в
+        память (только у первого запроса), чтение промпта, генерация. «Как в замере» — та же системная
+        подсказка, что получают модели в замере: «отвечай коротко, число — только числом»; без неё Qwen на
+        «ответь числом» пишет сотни токенов рассуждений, а на CPU это минуты. «Размышления» — режим think у моделей
+        Qwen: рассуждение показывается отдельно серым и стоит времени. 👍/👎 — ваша отметка ответа.</p>
+      <p><b>CLI и HTTP API.</b> «CLI» запускает на сервере <code>ollama run МОДЕЛЬ «вопрос» --think=false
+        --verbose</code> отдельным процессом и показывает вывод команды с её замерами. «HTTP» шлёт тот же вопрос
+        сырым запросом в родной <code>/api/chat</code> или OpenAI-совместимый <code>/v1/chat/completions</code> и
+        показывает запрос и ответ Ollama как есть, плюс эквивалент для <code>curl</code>.</p>
+      <p><b>Запросы разной сложности.</b> Простой — факт и перевод; средний — рассуждение с числом в ответе;
+        сложный — извлечение условий договора в JSON по схеме и ответ по документам с цитатами (формат Дня 24).
+        Верность проверяет код. Основная локальная модель выбирается правилом: больше верных → выше скорость
+        генерации → меньше ожидание первого токена; выбор пишется в <code>local-settings.json</code>.</p>
+    </div>
+  </details>
+
+<script>
+let состояние = null;
+let опрос = null;
+const ВОПРОСЫ_ПРИМЕРОВ = [];
+
+function экранировать(т) {
+  return String(т ?? '').replace(/[&<>"']/g, с => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[с]));
+}
+async function запрос(путь, тело) {
+  const ответ = await fetch(путь, тело === undefined ? {} : {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(тело)});
+  const данные = await ответ.json().catch(() => ({error: 'сервер ответил не JSON'}));
+  if (!ответ.ok) throw new Error(данные.error || ответ.statusText);
+  return данные;
+}
+const имяМодели = к => (document.querySelector(`option[value="${к}"]`) || {}).textContent || к;
+
+async function обновить() {
+  try {
+    состояние = await запрос('/api/local');
+  } catch (e) {
+    document.getElementById('ollama').innerHTML = `<div class="ошибка">${экранировать(e.message)}</div>`;
+    return;
+  }
+  нарисоватьOllama();
+  нарисоватьПримеры();
+  нарисоватьБенч();
+  const идёт = состояние.работа && !состояние.работа.готово;
+  if (идёт && !опрос) опрос = setInterval(обновить, 2000);
+  if (!идёт && опрос) { clearInterval(опрос); опрос = null; }
+}
+
+function нарисоватьOllama() {
+  const о = состояние.ollama;
+  if (о.error) { document.getElementById('ollama').innerHTML = `<div class="ошибка">${экранировать(о.error)}</div>`; return; }
+  const сырой = п => `<a href="${экранировать(о.address + п)}" target="_blank" class="сырой">${п}</a>`;
+  let html = `<div style="margin-bottom:6px">
+      <span class="плашка ${о.service === 'active' ? 'ок' : 'нет'}">служба ollama: ${экранировать(о.service)}</span>
+      <span class="плашка инфо">версия ${экранировать(о.version)}</span>
+      <span class="плашка ${о.loopback ? 'ок' : 'нет'}" id="петля">${экранировать(о.address)}${о.loopback ? ' — петлевой адрес, запросы не покидают машину' : ''}</span>
+      <span class="плашка инфо">окно контекста агента ${о.num_ctx} токенов</span></div>
+    <div class="мета">Сырой JSON самой Ollama: ${сырой('/api/version')} · ${сырой('/api/tags')} · ${сырой('/api/ps')}
+      · веса на диске: <code>${экранировать(о.disk.path)}</code> — ${о.disk.size_gb} ГБ · CLI: <code>${экранировать(о.cli || 'нет')}</code></div>
+    <table style="margin-top:8px" id="модели-ollama"><tr><th>скачанная модель</th><th>размер</th><th>параметры</th><th>квантование</th><th>семейство</th><th>ключ агента</th></tr>` +
+    о.models.map(м => `<tr data-модель="${экранировать(м.name)}"><td><code>${экранировать(м.name)}</code>${м.key === состояние.main ? ' <span class="плашка ок">основная</span>' : ''}</td>
+      <td class="ч">${м.size_gb} ГБ</td><td>${экранировать(м.params)}</td><td>${экранировать(м.quant)}</td>
+      <td>${экранировать(м.family)}</td><td>${экранировать(м.key || '— (эмбеддер Дня 21)')}</td></tr>`).join('') + '</table>';
+  html += `<table style="margin-top:8px" id="в-памяти"><tr><th>в памяти сейчас (/api/ps)</th><th>занимает</th><th>где считается</th><th>окно</th><th>выгрузится</th></tr>` +
+    (о.loaded.length ? о.loaded.map(м => `<tr><td><code>${экранировать(м.name)}</code></td><td class="ч">${м.size_gb} ГБ</td>
+      <td><b>${экранировать(м.processor)}</b></td><td class="ч">${м.context}</td><td>${экранировать(м.until.replace('T', ' '))}</td></tr>`).join('')
+      : '<tr><td colspan="5" class="мета">ни одной — модель загрузится при первом запросе</td></tr>') + '</table>';
+  document.getElementById('ollama').innerHTML = html;
+}
+
+function нарисоватьПримеры() {
+  const место = document.getElementById('примеры');
+  if (место.dataset.готово) return;
+  место.dataset.готово = '1';
+  место.innerHTML = '<span class="мета">примеры:</span>' + (состояние.tasks || []).filter(з => з.проверка.вид !== 'rag').map(з =>
+    `<button class="мелкая пример" data-уровень="${экранировать(з.уровень)}" data-ид="${экранировать(з.id)}" title="${экранировать(з.вопрос)}">${экранировать(з.уровень)}: ${экранировать(з.название)}</button>`).join('');
+  место.querySelectorAll('.пример').forEach(к => к.addEventListener('click', () => {
+    const з = состояние.tasks.find(т => т.id === к.dataset.ид);
+    document.getElementById('лок-вопрос').value = з.вопрос;
+  }));
+}
+
+function замерыHTML(и) {
+  const с = и.server || {};
+  // Скорость не измерить, если ответ пришёл одним куском: тогда «—», а не 0.
+  return `<div class="замеры">до первого токена <b>${и.ttft_s} с</b> · всего ${и.total_s} с · <b>${и.tok_s ? и.tok_s : '—'} ток/с</b> ·
+    вход ${и.tokens_in} / выход ${и.tokens_out} ток. · $${и.cost}` +
+    (и.local ? `<br>Ollama: загрузка в память ${с.load_s} с · чтение промпта ${с.prompt_s} с (${с.prompt_tok_s} ток/с) · генерация ${с.gen_s} с` : '') + '</div>';
+}
+
+function отметкиHTML(задача, модель) {
+  const все = (состояние && состояние.bench && состояние.bench.marks) || {};
+  const м = (все[`${задача}|${модель}`] || {}).mark;
+  return `<span class="отметки" data-задача="${экранировать(задача)}" data-модель="${экранировать(модель)}">` +
+    ['👍', '👎'].map(о => `<button class="${м === о ? 'выбрана' : ''}" data-оценка="${о}">${о}</button>`).join(' ') + '</span>';
+}
+
+document.addEventListener('click', async e => {
+  const к = e.target.closest('.отметки button');
+  if (!к) return;
+  const м = к.closest('.отметки');
+  try {
+    const данные = await запрос('/api/local/mark', {task: м.dataset.задача, model: м.dataset.модель, mark: к.dataset.оценка});
+    if (состояние.bench) состояние.bench.marks = данные.marks;
+    м.querySelectorAll('button').forEach(б => б.classList.toggle('выбрана', б === к));
+  } catch (err) { alert(err.message); }
+});
+
+async function спросить() {
+  const вопрос = document.getElementById('лок-вопрос').value.trim();
+  if (!вопрос) return;
+  const кнопка = document.getElementById('лок-спросить');
+  кнопка.disabled = true;
+  const режим = document.getElementById('лок-режим').value;
+  const локальная = document.getElementById('лок-модель').value, облачная = document.getElementById('облако-модель').value;
+  const модели = {local: [локальная], cloud: [облачная], both: [локальная, облачная]}[режим];
+  const куда = document.getElementById('лок-ответы');
+  const задача = 'вопрос: ' + вопрос.slice(0, 120);
+  куда.innerHTML = модели.map(м => `<div class="ответ ${м === локальная ? 'локально' : 'облако'}" data-модель="${экранировать(м)}" data-готово="0">
+      <div class="кто">${экранировать(имяМодели(м))} · ${м === локальная ? 'локально, 127.0.0.1' : 'облако'}</div>
+      <div class="мысли" hidden></div><div class="текст курсор"></div><div class="итог мета">ждём первый токен…</div></div>`).join('');
+  const начало = performance.now();
+  try {
+    const ответ = await fetch('/api/local/ask', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question: вопрос, mode: режим, model: локальная, cloud: облачная,
+                            think: document.getElementById('лок-думать').checked,
+                            short: document.getElementById('лок-коротко').checked})});
+    if (!ответ.ok) throw new Error((await ответ.json().catch(() => ({}))).error || ответ.statusText);
+    const читатель = ответ.body.getReader();
+    const декодер = new TextDecoder();
+    let хвост = '';
+    for (;;) {
+      const {value, done} = await читатель.read();
+      if (done) break;
+      хвост += декодер.decode(value, {stream: true});
+      const строки = хвост.split('\n');
+      хвост = строки.pop();
+      for (const с of строки) {
+        if (!с.trim()) continue;
+        const событие = JSON.parse(с);
+        const блок = куда.querySelector(`.ответ[data-модель="${CSS.escape(событие.model)}"]`);
+        if (!блок) continue;
+        if (событие.тип === 'текст') {
+          блок.querySelector('.текст').textContent += событие.текст;
+          if (!блок.dataset.первый) { блок.dataset.первый = '1';
+            блок.querySelector('.итог').textContent = `первый токен через ${((performance.now() - начало) / 1000).toFixed(1)} с…`; }
+        } else if (событие.тип === 'думает') {
+          const м = блок.querySelector('.мысли'); м.hidden = false; м.textContent += событие.текст; м.scrollTop = м.scrollHeight;
+        } else if (событие.тип === 'итог') {
+          блок.querySelector('.текст').classList.remove('курсор');
+          блок.querySelector('.текст').textContent = событие.text;
+          блок.querySelector('.итог').innerHTML = замерыHTML(событие) + ' ' + отметкиHTML(задача, событие.model);
+          блок.dataset.готово = '1';
+          блок.dataset.ttft = событие.ttft_s; блок.dataset.tokS = событие.tok_s;
+        } else if (событие.тип === 'ошибка') {
+          блок.querySelector('.текст').classList.remove('курсор');
+          блок.querySelector('.итог').innerHTML = `<div class="ошибка">${экранировать(событие.текст)}</div>`;
+          блок.dataset.готово = 'ошибка';
+        }
+      }
+    }
+  } catch (e) {
+    куда.insertAdjacentHTML('beforeend', `<div class="ошибка">${экранировать(e.message)}</div>`);
+  } finally {
+    кнопка.disabled = false;
+    обновить();
+  }
+}
+
+async function доступ(вид) {
+  const вопрос = document.getElementById('доступ-вопрос').value.trim();
+  const куда = document.getElementById('доступ');
+  const модель = document.getElementById('лок-модель').value;
+  куда.innerHTML = `<div class="мета" style="margin-top:8px">выполняется… (${вид === 'cli' ? 'ollama run' : 'HTTP-запрос к Ollama'})</div>`;
+  try {
+    if (вид === 'cli') {
+      const р = await запрос('/api/local/cli', {question: вопрос, model: модель});
+      куда.innerHTML = `<div class="мета" style="margin-top:8px" id="доступ-итог" data-вид="cli">Код возврата ${р.code} · ${р.seconds} с</div>
+        <pre id="доступ-вывод">$ ${экранировать(р.command)}\n\n${экранировать(р.stdout || р.stderr)}\n\n` +
+        Object.entries(р.timings).map(([к, з]) => `${экранировать(к)}: ${экранировать(з)}`).join('\n') + '</pre>';
+    } else {
+      const р = await запрос('/api/local/http', {question: вопрос, kind: вид, model: модель});
+      const ответ = typeof р.response === 'object' ? Object.fromEntries(Object.entries(р.response).filter(([к]) => к !== 'context')) : р.response;
+      куда.innerHTML = `<div class="мета" style="margin-top:8px" id="доступ-итог" data-вид="${вид}">POST <code>${экранировать(р.url)}</code> → HTTP ${р.status} · ${р.seconds} с ·
+          текст ответа: <b id="доступ-текст">${экранировать(р.text)}</b></div>
+        <div class="мета">как в терминале: <code>${экранировать(р.curl)}</code></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><div class="мета">запрос</div><pre>${экранировать(JSON.stringify(р.request, null, 1))}</pre></div>
+          <div><div class="мета">ответ Ollama как есть</div><pre id="доступ-вывод">${экранировать(JSON.stringify(ответ, null, 1))}</pre></div></div>`;
+    }
+  } catch (e) {
+    куда.innerHTML = `<div class="ошибка">${экранировать(e.message)}</div>`;
+  }
+}
+
+async function запуститьБенч() {
+  try {
+    await запрос('/api/local/bench', {cloud: document.getElementById('бенч-облако').checked});
+  } catch (e) {
+    document.getElementById('бенч-ход').innerHTML = `<div class="ошибка">${экранировать(e.message)}</div>`;
+    return;
+  }
+  обновить();
+}
+
+function нарисоватьБенч() {
+  const р = состояние.работа;
+  const ходЭл = document.getElementById('бенч-ход');
+  const кнопка = document.getElementById('бенч-запустить');
+  if (р && !р.готово) {
+    кнопка.disabled = true;
+    const доля = р.всего ? Math.round(100 * р.сделано / р.всего) : 0;
+    ходЭл.innerHTML = `<div class="ход"><div style="width:${доля}%"></div></div>
+      <div class="мета">${экранировать(р.этап)}: ${р.сделано}/${р.всего} — ${экранировать(р.что)}</div>`;
+  } else {
+    кнопка.disabled = false;
+    ходЭл.innerHTML = р && р.ошибка ? `<div class="ошибка">${экранировать(р.ошибка)}</div>` : (р && р.готово ? '<div class="мета ок">замер закончен</div>' : '');
+  }
+  const б = состояние.bench;
+  const куда = document.getElementById('бенч');
+  if (!б) { куда.innerHTML = р && !р.готово ? '' : '<div class="мета">Замер ещё не запускался.</div>'; return; }
+  const уровни = ['простой', 'средний', 'сложный'];
+  let html = `<div class="мета" style="margin-top:6px">Прогон ${экранировать(б.when.replace('T', ' '))} · ${б.seconds} с</div>`;
+  if (б.chosen && б.chosen.model) html += `<div class="выбор" id="бенч-выбор">Основная локальная модель: <b>${экранировать(б.chosen.label)}</b> —
+      ${б.chosen.верно} из ${б.chosen.задач} верно, ${б.chosen.tok_s} ток/с. <span class="мета">Правило: ${экранировать(б.chosen.rule)}</span></div>`;
+  html += `<table id="бенч-итог"><tr><th>модель</th><th>где</th><th>верно</th>${уровни.map(у => `<th>${у}</th>`).join('')}<th>ток/с</th><th>до 1-го токена, с</th><th>загрузка, с</th><th>время, с</th><th>$</th></tr>` +
+    б.models.map(м => { const и = б.totals[м]; return `<tr data-модель="${экранировать(м)}"><td>${экранировать(и.label)}</td><td>${и.local ? 'локально' : 'облако'}</td>
+      <td class="ч"><b>${и.верно} из ${и.задач}</b></td>${уровни.map(у => `<td class="ч">${и.по_уровням[у][0]} из ${и.по_уровням[у][1]}</td>`).join('')}
+      <td class="ч">${и.tok_s}</td><td class="ч">${и.ttft_s}</td><td class="ч">${и.загрузка_s || '—'}</td><td class="ч">${и.секунд}</td><td class="ч">${и.стоимость}</td></tr>`; }).join('') + '</table>';
+  for (const з of б.tasks) {
+    html += `<details style="margin-top:8px" data-задача="${экранировать(з.id)}"><summary>${экранировать(з.id)} · ${экранировать(з.уровень)} · ${экранировать(з.название)} — верно у ` +
+      б.models.filter(м => (б.answers[м] || {})[з.id] && б.answers[м][з.id].ok).length + ` из ${б.models.length}</summary>
+      <div class="мета" style="white-space:pre-wrap;margin:4px 0">${экранировать(з.вопрос.slice(0, 700))}</div>
+      <table><tr><th>модель</th><th>верно</th><th>ответ</th><th>ток/с</th><th>до 1-го, с</th><th>проверка кодом</th><th>отметка</th></tr>` +
+      б.models.map(м => { const о = (б.answers[м] || {})[з.id] || {}; return `<tr><td>${экранировать(б.totals[м].label)}</td>
+        <td class="${о.ok ? 'ок' : 'нет'}">${о.ok ? '✓' : '✗'}</td><td style="max-width:520px;white-space:pre-wrap">${экранировать(String(о.text || о.error || '').slice(0, 400))}</td>
+        <td class="ч">${о.tok_s ?? ''}</td><td class="ч">${о.ttft_s ?? ''}</td><td>${экранировать(о.note || '')}</td><td>${отметкиHTML(з.id, м)}</td></tr>`; }).join('') + '</table></details>';
+  }
+  куда.innerHTML = html;
+}
+
+document.getElementById('обновить').addEventListener('click', обновить);
+document.getElementById('лок-спросить').addEventListener('click', спросить);
+document.getElementById('лок-вопрос').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); спросить(); }
+});
+document.getElementById('через-cli').addEventListener('click', () => доступ('cli'));
+document.getElementById('через-native').addEventListener('click', () => доступ('native'));
+document.getElementById('через-openai').addEventListener('click', () => доступ('openai'));
+document.getElementById('бенч-запустить').addEventListener('click', запуститьБенч);
+
+// --- офлайн-режим (День 27): карта ролей, поиск, серверы MCP, журнал сети --------
+function нарисоватьОфлайн(о) {
+  const к = о.map || {};
+  const п = (к.search || {});
+  const подбор = п['подбор'] || null;
+  let html = `<div class="${о.on ? 'ок' : 'мета'}" id="офлайн-состояние" style="margin-bottom:6px"><b>${о.on
+      ? '🔒 Офлайн включён' : '☁ Облачный режим'}</b>${о.source ? ` · включил: ${экранировать(о.source)}` : ''} — ` +
+    (о.on ? 'каждая роль агента идёт в локальную модель ниже, облако и интернет-серверы MCP заблокированы'
+          : 'роли агента идут в облачные модели; карта ниже начнёт действовать после включения') + '</div>';
+  if (о.map_error) html += `<div class="ошибка">${экранировать(о.map_error)}</div>`;
+  html += `<table id="офлайн-роли"><tr><th>роль агента</th><th>локальная модель</th><th>в Ollama</th><th>схема ответа</th><th>зачем</th></tr>` +
+    (к.roles || []).map(р => `<tr data-роль="${экранировать(р.role)}"><td>${экранировать(р.role)}</td>
+      <td><b>${экранировать(р.label)}</b> <code>${экранировать(р.api_id)}</code></td>
+      <td class="${р.installed ? 'ок' : 'нет'}">${р.installed ? 'скачана' : 'нет'}</td>
+      <td>${р.schema ? `<code>${экранировать(р.schema)}</code>` : '—'}</td><td class="мета">${экранировать(р.why || '')}</td></tr>`).join('') + '</table>';
+  html += `<div style="margin-top:8px" id="офлайн-поиск"><b>Поиск в офлайне:</b> реранкер <code>${экранировать(п['реранкер'] || '—')}</code>
+    (кросс-энкодер bge-reranker на CPU вместо LLM-реранкера), кандидатов ${п.k_до ?? '—'} → в промпт ${п.k_после ?? '—'},
+    порог «не знаю» ${п['порог_уверенности'] ?? '—'} (шкала кросс-энкодера), подвопросов до ${п['подвопросов'] ?? '—'};
+    история в промпт: ${(к.history || {})['окно'] ?? '—'} сообщения по ${(к.history || {})['символов'] ?? '—'} символов.` +
+    (подбор ? `<div class="мета">Подбор ${экранировать(подбор['когда'])} на ${экранировать(подбор['стенд'])}: ` +
+      (подбор['варианты'] || []).map(в => `K_до ${в.k_до} — нужный фрагмент в промпте у ${в['найдено']} из ${в['с_ответом']}`).join('; ') +
+      `; выбрано K_до ${подбор['выбор'].k_до}, порог ${подбор['выбор']['порог_уверенности']}: ловушки «не знаю» ${подбор['выбор']['ловушки_не_знаю']} из ${подбор['выбор']['ловушек']}, лишних «не знаю» ${подбор['выбор']['лишние_не_знаю']}</div>` : '') + '</div>';
+  const а = к.agent || {};
+  const флажок = (ключ, подпись) => `<label class="флажок" style="display:inline-flex;margin-right:12px"><input type="checkbox"
+    data-агент="${ключ}" ${а[ключ] ? 'checked' : ''}> ${подпись}</label>`;
+  html += `<div style="margin-top:8px" id="офлайн-агент"><b>Агент с инструментами в офлайне:</b> ` +
+    флажок('сжатый_промпт', 'сжатый промпт') + флажок('самоотчёт', 'проверка самоотчёта') +
+    флажок('судья_по_смыслу', 'судья по смыслу') +
+    `<div class="мета">Сжатый промпт: без рамок проекта и принятых решений, инварианты — кодом и правилом,
+      знаний — не больше ${а['знаний'] ?? 2} и только совпавших со словами запроса, правила инструментов короче вчетверо.
+      У qwen3.5 в Ollama кэш начала промпта не работает: каждый круг инструментов перечитывает промпт целиком.</div></div>`;
+  html += `<div style="margin-top:8px" id="офлайн-серверы"><b>MCP-серверы:</b> ` + (о.servers || []).map(с =>
+    `<span class="${с.ready ? 'ок' : 'нет'}" title="${экранировать(с.why || '')}">${с.ready ? '✓' : '✗'} ${экранировать(с.name)}</span>`).join(' · ') +
+    `<div class="мета">в офлайне не подключаются серверы с выходом в интернет: удалённые HTTP, npx (скачивает пакет), настоящий Яндекс.Трекер</div></div>`;
+  const н = о.net || {};
+  html += `<div style="margin-top:8px" id="офлайн-журнал"><b>Журнал сети процесса:</b> локальных запросов ${н['локальных'] || 0},
+      внешних <b class="${н['внешних'] ? 'нет' : 'ок'}">${н['внешних'] || 0}</b>, заблокировано ${н['заблокировано'] || 0}` +
+    ((н.recent || []).length ? `<table style="margin-top:4px"><tr><th>когда</th><th>запрос</th><th>адрес</th><th>итог</th></tr>` +
+      н.recent.slice().reverse().slice(0, 12).map(з => `<tr><td>${экранировать(з.when)}</td><td>${экранировать(з.method)} ${экранировать(з.path)}</td>
+        <td class="${з.local ? 'ок' : 'нет'}">${экранировать(з.host)} ${з.local ? '(локальный)' : '(ВНЕШНИЙ)'}</td>
+        <td>${экранировать(з.result)}${з.model ? ' · ' + экранировать(з.model) : ''}</td></tr>`).join('') + '</table>' : '') + '</div>';
+  document.getElementById('офлайн-карта').innerHTML = html;
+  // В офлайне на этой странице — только «локально».
+  const режим = document.getElementById('лок-режим');
+  режим.querySelectorAll('option[data-облако]').forEach(о2 => { о2.disabled = !!о.on; });
+  if (о.on && режим.value !== 'local') режим.value = 'local';
+}
+document.addEventListener('офлайн', e => нарисоватьОфлайн(e.detail));
+document.getElementById('офлайн-карта').addEventListener('change', async e => {
+  const ключ = e.target.dataset && e.target.dataset.агент;
+  if (!ключ) return;
+  try {
+    нарисоватьОфлайн(await запрос('/api/offline/agent', {[ключ]: e.target.checked}));
+  } catch (ошибка) {
+    alert(ошибка.message);
+  }
+});
+document.getElementById('офлайн-сбросить').addEventListener('click', async () => {
+  нарисоватьОфлайн(await запрос('/api/offline/net/reset', {}));
+});
+// --- День 29: оптимизация под задачу -------------------------------------------------
+let опт = null, оптОпрос = null;
+const проц = д => д === null || д === undefined ? '—' : `${д > 0 ? '+' : д < 0 ? '−' : ''}${Math.abs(д * 100).toFixed(0)} %`;
+const чсл = (з, н = 1) => з === null || з === undefined || з === '' ? '—' : (typeof з === 'number' ? з.toFixed(н).replace('.', ',') : з);
+function доля(было, стало) { return (!было || стало === null || стало === undefined) ? null : (стало - было) / было; }
+// К «до» — парно, на тех же вопросах (медиана отношений), как в OPTIMIZE.md.
+function парно(б, с, поле) {
+  const пб = (б || {}).по_вопросам || {}, пс = (с || {}).по_вопросам || {};
+  const д = Object.keys(пб).filter(в => в in пс).map(в => доля(пб[в][поле], пс[в][поле]))
+    .filter(х => х !== null && х !== undefined).sort((а, б2) => а - б2);
+  if (!д.length) return доля((б || {})[поле], (с || {})[поле]);
+  const м = Math.floor(д.length / 2);
+  return д.length % 2 ? д[м] : (д[м - 1] + д[м]) / 2;
+}
+
+async function обновитьОпт() {
+  try { опт = await запрос('/api/opt'); } catch (e) {
+    document.getElementById('опт-сводка').innerHTML = `<div class="ошибка">${экранировать(e.message)}</div>`; return; }
+  нарисоватьОпт();
+  const идёт = опт.running || опт.busy;
+  if (идёт && !оптОпрос) оптОпрос = setInterval(обновитьОпт, 3000);
+  if (!идёт && оптОпрос) { clearInterval(оптОпрос); оптОпрос = null; }
+}
+
+function нарисоватьОпт() {
+  const т = опт.tuning, с = опт.server2;
+  const после = т.configs.find(к => к.имя === (т.after || 'после'));
+  document.getElementById('опт-сводка').innerHTML =
+    (т.error ? `<div class="ошибка">${экранировать(т.error)}</div>` : '') +
+    `<span class="плашка ${опт.missing.length ? 'нет' : 'ок'}">${опт.missing.length ? 'нет весов: ' + экранировать(опт.missing.join(', ')) : 'все веса в Ollama'}</span>` +
+    `<span class="плашка ${после ? 'ок' : 'инфо'}">«после»: ${после ? экранировать(после.описание || после.модель) : 'ещё не собрано'}</span>` +
+    `<span class="плашка ${с.running ? 'ок' : 'инфо'}">второй сервер: ${с.running ? 'работает' : 'не запущен'}</span>`;
+  const решение = (опт.report || {}).решение || {};
+  document.getElementById('опт-конфигурации').innerHTML = `<table><tr><th>конфигурация</th><th>рычаг</th><th>модель / веса</th>
+    <th>опции</th><th>шаблон</th><th>сервер</th><th>описание</th></tr>` + т.configs.map(к => {
+      const класс = (решение.взяты || []).includes(к.имя) ? 'взят' : (решение.серверные || []).includes(к.имя) ? 'серверный'
+        : (решение.отклонены || []).includes(к.имя) ? 'отклонён' : '';
+      return `<tr class="${класс}" title="${экранировать((решение.причины || {})[к.имя] || '')}"><td><b>${экранировать(к.имя)}</b></td>
+        <td>${экранировать(к.рычаг || '—')}</td><td>${экранировать(к.модель)}${к.тег ? ' · <code>' + экранировать(к.тег) + '</code>' : ''}</td>
+        <td><code>${экранировать(Object.entries(к.опции || {}).map(([к2, з]) => к2 + ' ' + з).join(', ') || '—')}</code></td>
+        <td>${экранировать(к.шаблон || 'как у роли')}</td>
+        <td>${экранировать(к.сервер)}${Object.keys(к.переменные || {}).length ? '<br><span class="мета">' + экранировать(Object.entries(к.переменные).map(([к2, з]) => к2 + '=' + з).join(' ')) + '</span>' : ''}</td>
+        <td class="мета">${экранировать(к.описание || '')}</td></tr>`; }).join('') + '</table>';
+  document.getElementById('опт-сервер').textContent = с.running
+    ? `работает · PID ${с.pid} · ${JSON.stringify(с.vars)} · в памяти: ${(с.loaded || []).map(м => м.name).join(', ') || 'ничего'}`
+    : 'не запущен';
+  const вв = document.getElementById('опт-вопрос');
+  if (!вв.options.length) {
+    вв.innerHTML = опт.questions.map(в => `<option value="${экранировать(в.id)}">${экранировать(в.id)} · ${экранировать(в.question)}</option>`).join('');
+  }
+  for (const [ид, по] of [['опт-а', 'до'], ['опт-б', после ? после.имя : 'р-шаблон']]) {
+    const сел = document.getElementById(ид), было = сел.value;
+    сел.innerHTML = т.configs.map(к => `<option value="${экранировать(к.имя)}">${экранировать(к.имя)}</option>`).join('');
+    сел.value = было && т.configs.some(к => к.имя === было) ? было : по;
+  }
+  const ход = опт.state;
+  const идёт = опт.running;
+  ['опт-скрининг', 'опт-микро', 'опт-качество', 'опт-модель', 'опт-рядом', 'опт-сервер-старт', 'опт-сервер-стоп'].forEach(и =>
+    document.getElementById(и).disabled = !!(идёт || опт.busy));
+  document.getElementById('опт-стоп').disabled = !идёт || опт.outside;
+  document.querySelector('#опт-ход-полоса > div').style.width = ход && ход.всего ? `${100 * ход.готово / ход.всего}%` : '0';
+  document.getElementById('опт-ход').textContent = ход
+    ? `${ход.вид} «${ход.метка}»: готово ${ход.готово} из ${ход.всего}${ход.текущий ? ' · сейчас ' + ход.текущий : ''}${ход.завершён ? ' · завершён' : идёт ? ' · идёт' : ' · остановлен'}`
+      + (опт.outside ? ' · запущен из консоли — остановить: Ctrl+C в её терминале' : '')
+      + (опт.error ? ' · ошибка: ' + опт.error : '')
+    : 'прогонов ещё не было';
+  document.getElementById('опт-итоги').innerHTML = итогиОпт(опт.report || {});
+}
+
+function таблицаСводки(заголовок, св) {
+  if (!св) return '';
+  const б = св['до'];
+  return `<h3 style="margin-top:10px">${экранировать(заголовок)}</h3><table><tr><th>конфигурация</th><th>верно</th><th>судья да/част./нет</th>
+    <th>токенов промпта</th><th>чтение, с</th><th>чтение, ток/с</th><th>генерация, ток/с</th><th>ответ, с</th><th>к «до»</th>
+    <th>пик ОЗУ, МБ</th><th>к «до»</th><th>CPU, с</th><th>нагрузка</th></tr>` + Object.values(св).map(с => {
+      const дв = б ? парно(б, с, 'модель_с') : null, дп = б ? парно(б, с, 'пик_мб') : null;
+      const кл = д => д === null ? '' : д <= -0.05 ? 'лучше' : д >= 0.05 ? 'хуже' : '';
+      return `<tr><td>${экранировать(с.конфигурация)}</td><td class="ч">${с.верно} из ${с.годных}</td>
+        <td>${с.судья.да}/${с.судья.частично}/${с.судья.нет}</td><td class="ч">${чсл(с.вход, 0)}</td><td class="ч">${чсл(с.чтение_с)}</td>
+        <td class="ч">${чсл(с.скорость_чтения)}</td><td class="ч">${чсл(с.ток_с, 2)}</td><td class="ч">${чсл(с.модель_с)}</td>
+        <td class="ч ${кл(дв)}">${б ? проц(дв) : '—'}</td><td class="ч">${чсл(с.пик_мб, 0)}</td><td class="ч ${кл(дп)}">${б ? проц(дп) : '—'}</td>
+        <td class="ч">${чсл(с.cpu_с)}</td><td class="ч">${чсл(с.нагрузка)}</td></tr>`; }).join('') + '</table>';
+}
+
+function итогиОпт(о) {
+  let html = '';
+  if (о.качество) html += таблицаСводки(`«До» и «после» на 14 вопросах (${о.качество.метка})`, о.качество.сводка);
+  if (о.скрининг) html += таблицаСводки(`Скрининг рычагов (${о.скрининг.метка}) — «к «до»» парно; время здесь шумит, решают токены, память и микрозамер`, о.скрининг.сводка);
+  if (о.микро && о.микро.сводка) {
+    html += `<h3 style="margin-top:10px">Микрозамер скорости (${экранировать(о.микро.метка)}) <span class="мета">короткий промпт, раунды «каруселью», к «до» — парно</span></h3>
+      <table><tr><th>конфигурация</th><th>раундов</th><th>чтение, ток/с</th><th>к «до»</th><th>побед</th><th>генерация, ток/с</th><th>к «до»</th><th>побед</th><th>пик ОЗУ, МБ</th></tr>` +
+      Object.values(о.микро.сводка).map(с => `<tr><td>${экранировать(с.конфигурация)}</td><td class="ч">${с.раундов}</td>
+        <td class="ч">${чсл(с.чтение_ток_с)}</td><td class="ч ${с.чтение_доля >= 0.05 ? 'лучше' : с.чтение_доля <= -0.05 ? 'хуже' : ''}">${проц(с.чтение_доля)}</td>
+        <td class="ч">${с.чтение_побед} из ${с.пар}</td><td class="ч">${чсл(с.генерация_ток_с, 2)}</td>
+        <td class="ч ${с.генерация_доля >= 0.05 ? 'лучше' : с.генерация_доля <= -0.05 ? 'хуже' : ''}">${проц(с.генерация_доля)}</td>
+        <td class="ч">${с.генерация_побед} из ${с.пар}</td><td class="ч">${чсл(с.пик_мб, 0)}</td></tr>`).join('') + '</table>';
+  }
+  if (о.gpu && о.gpu.сводка) html += таблицаСводки(`На арендованном GPU (${о.gpu.метка || ''})`, о.gpu.сводка);
+  const vps = (опт.tuning || {}).vps;
+  if (vps && (vps.провайдеры || []).length) {
+    html += `<h3 style="margin-top:10px">GPU-VPS: подбор и смета <span class="мета">цены на ${экранировать(vps.дата)}</span></h3>
+      <table><tr><th>провайдер</th><th>GPU</th><th>цена</th><th>тарификация</th><th>ЦОД, оплата</th></tr>` +
+      vps.провайдеры.map(п => `<tr><td>${экранировать(п.провайдер)}</td><td>${экранировать(п.gpu)}</td><td>${экранировать(п.цена)}</td>
+        <td>${экранировать(п.тарификация)}</td><td>${экранировать(п.где)}</td></tr>`).join('') + '</table>' +
+      (vps.смета || []).map(с => `<div class="мета" style="margin-top:4px">• ${экранировать(с)}</div>`).join('');
+  }
+  if (о.решение && Object.keys(о.решение.причины || {}).length) {
+    html += '<div class="выбор"><b>Правило D-05:</b> в «после» — ' + экранировать((о.решение.взяты || []).join(', ') || 'ничего')
+      + ((о.решение.серверные || []).length ? '; серверные (рекомендация для службы) — ' + экранировать(о.решение.серверные.join(', ')) : '')
+      + '</div>';
+  }
+  return html || '<div class="мета">Отчёта ещё нет — запустите скрининг.</div>';
+}
+
+async function оптРядом() {
+  const вопрос = document.getElementById('опт-свой').value.trim() || document.getElementById('опт-вопрос').value;
+  const имена = [document.getElementById('опт-а').value, document.getElementById('опт-б').value];
+  const куда = document.getElementById('опт-ответы');
+  куда.innerHTML = имена.map((и, н) => `<div class="ответ ${н ? 'после' : 'до'}" data-конф="${экранировать(и)}">
+      <div class="кто">${экранировать(и)}</div><div class="ход-конф мета">ждёт своей очереди…</div>
+      <div class="текст"></div><div class="итог мета"></div></div>`).join('');
+  document.getElementById('опт-рядом').disabled = true;
+  let текущая = null;
+  try {
+    const ответ = await fetch('/api/opt/side', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question: вопрос, configs: имена, stream: true})});
+    if (!ответ.ok) throw new Error((await ответ.json().catch(() => ({}))).error || ответ.statusText);
+    const читатель = ответ.body.getReader(), декодер = new TextDecoder();
+    let хвост = '';
+    for (;;) {
+      const {value, done} = await читатель.read();
+      if (done) break;
+      хвост += декодер.decode(value, {stream: true});
+      const строки = хвост.split('\n'); хвост = строки.pop();
+      for (const стр of строки) {
+        if (!стр.trim()) continue;
+        const с = JSON.parse(стр);
+        if (с.событие === 'этап' && с.этап === 'загрузка') {
+          текущая = куда.querySelector(`.ответ[data-конф="${CSS.escape(с.конфигурация)}"]`);
+          if (текущая) текущая.querySelector('.ход-конф').textContent = `загрузка ${с.модель} (${с.сервер})…`;
+        } else if (с.событие === 'этап' && с.этап === 'ответ' && текущая) {
+          текущая.querySelector('.ход-конф').textContent = `ответ · ${с.модель} (локально) · фрагментов ${с.фрагментов}…`;
+        } else if (с.событие === 'токены' && текущая) {
+          текущая.querySelector('.ход-конф').textContent = `пишет: ${с.выход} ток. · ${с.секунд} с`;
+        } else if (с.событие === 'готово') {
+          for (const з of с.records || []) {
+            const блок = куда.querySelector(`.ответ[data-конф="${CSS.escape(з.конфигурация)}"]`);
+            if (!блок) continue;
+            const о = з.ответ, т = о.timings || {}, р = з.ресурсы || {};
+            блок.querySelector('.ход-конф').textContent = `${з.верно ? 'верно ✓' : 'неверно ✗'} · судья: ${(з.судья || {}).смысл || '—'} · шаблон ${з.шаблон}`;
+            блок.querySelector('.текст').textContent = о.abstain ? `Не знаю: ${о.clarification || о.abstain_reason}` : о.text;
+            блок.querySelector('.итог').innerHTML = `загрузка ${чсл(з.загрузка_с)} с · промпт ${т.вход} ток. · чтение ${чсл(т.чтение_с)} с
+              (${чсл(т.скорость_чтения)} ток/с) · генерация ${чсл(т.генерация_с)} с (${чсл(т.ток_с, 2)} ток/с) · <b>ответ ${чсл(т.модель_с)} с</b><br>
+              пик ОЗУ раннера ${чсл(р.пик_мб, 0)} МБ · CPU ${чсл(р.cpu_с)} с · нагрузка ${чсл(р.нагрузка_до)} · внешних ${з.сеть.внешних}`;
+          }
+        } else if (с.событие === 'ошибка') {
+          куда.insertAdjacentHTML('beforeend', `<div class="ошибка">${экранировать(с.error)}</div>`);
+        }
+      }
+    }
+  } catch (e) {
+    куда.insertAdjacentHTML('beforeend', `<div class="ошибка">${экранировать(e.message)}</div>`);
+  } finally {
+    обновитьОпт();
+  }
+}
+
+async function оптДействие(путь, тело) {
+  try { const о = await запрос(путь, тело); if (о.error) alert(о.error); }
+  catch (e) { alert(e.message); }
+  обновитьОпт();
+}
+document.getElementById('опт-обновить').addEventListener('click', обновитьОпт);
+document.getElementById('опт-рядом').addEventListener('click', оптРядом);
+document.getElementById('опт-скрининг').addEventListener('click', () => оптДействие('/api/opt/run', {kind: 'скрининг'}));
+document.getElementById('опт-качество').addEventListener('click', () => оптДействие('/api/opt/run', {kind: 'качество'}));
+document.getElementById('опт-микро').addEventListener('click', () => оптДействие('/api/opt/run', {kind: 'микрозамер'}));
+document.getElementById('опт-стоп').addEventListener('click', () => оптДействие('/api/opt/run', {action: 'stop'}));
+document.getElementById('опт-модель').addEventListener('click', () => оптДействие('/api/opt/model', {}));
+document.getElementById('опт-отчёт').addEventListener('click', () => оптДействие('/api/opt/report', {}));
+document.getElementById('опт-сервер-старт').addEventListener('click', () => {
+  const vars = {};
+  document.getElementById('опт-переменные').value.split(',').forEach(п => { const [к, з] = п.split('='); if (к && з) vars[к.trim()] = з.trim(); });
+  оптДействие('/api/opt/server2', {action: 'start', vars});
+});
+document.getElementById('опт-сервер-стоп').addEventListener('click', () => оптДействие('/api/opt/server2', {action: 'stop'}));
+обновитьОпт();
+
+обновить();
+</script>
+</body>
+</html>
