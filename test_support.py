@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -486,6 +488,31 @@ class СервисПоддержки(_Данные):
         с = self.войти(self.ключ_сотр, "/support/desk")
         self.assertIn("Пульт поддержки", с.get("/support/desk").text)
         self.assertTrue(self.к.get("/api/support/health").json()["ok"])
+
+    @unittest.skipUnless(shutil.which("node"), "нет node")
+    def test_скрипты_страниц_разбираются(self) -> None:
+        # Синтаксическая ошибка в <script> не видна тестам API: пульт падал на «м.доля_👍».
+        for имя in ("support.html", "support_desk.html"):
+            with open(os.path.join(КОРЕНЬ, "templates", имя), encoding="utf-8") as f:
+                код = re.search(r"<script>(.*?)</script>", f.read(), re.S).group(1)
+            with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as js:
+                js.write(код)
+            try:
+                р = subprocess.run(["node", "--check", js.name], capture_output=True, text=True, timeout=30)
+            finally:
+                os.unlink(js.name)
+            self.assertEqual(р.returncode, 0, f"{имя}: {р.stderr[-300:]}")
+
+
+class ЧасыДанных(unittest.TestCase):
+    def test_часы_идут_от_сейчас_seed(self) -> None:
+        from agent.support import data
+        with tempfile.TemporaryDirectory() as к:
+            х = data.Хранилище(os.path.join(к, "desk.json"))
+            х.сбросить()
+            т = х.создать_тикет("u01", "тема", "текст")
+            self.assertTrue(т["создана"].startswith("2026-10-16T12:00"), т["создана"])
+            self.assertTrue(х.политика()["сейчас"].startswith("2026-10-16T12:00"))
 
 
 if __name__ == "__main__":

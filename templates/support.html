@@ -96,7 +96,7 @@ function сообщениеHTML(с, последнийИИ) {
         (с.факты || []).length ? `<span title="факты тикета">🔎 по данным: ${э(с.факты.length)} фактов вашей заявки</span>` : ''}</div>` : '';
   const оценка = с.автор === 'ассистент' && последнийИИ
     ? `<div class="оценка">Ответ помог? <button data-о="1" class="${с.оценка === 1 ? 'да' : ''}">👍</button> <button data-о="-1" class="${с.оценка === -1 ? 'да' : ''}">👎</button></div>` : '';
-  return `<div class="сообщение ${э(с.автор)}" data-автор="${э(с.автор)}"><div class="кто">${э(КТО[с.автор] || с.автор)} · ${э((с.время || '').replace('T', ' ').slice(0, 16))}</div>${э(с.текст)}${опора}${оценка}</div>`;
+  return `<div class="сообщение ${э(с.автор)}" data-автор="${э(с.автор)}"><div class="кто">${э(КТО[с.автор] || с.автор)} · ${с.время ? э(с.время.replace('T', ' ').slice(0, 16)) : 'отправлено'}</div>${э(с.текст)}${опора}${оценка}</div>`;
 }
 
 async function открыть(номер) {
@@ -124,7 +124,7 @@ document.getElementById('форма').onsubmit = async (е) => {
   кнопка.disabled = true;
   const лента = document.getElementById('лента');
   if (!текущий) лента.innerHTML = '';
-  лента.insertAdjacentHTML('beforeend', сообщениеHTML({автор:'заявитель', текст, время:new Date().toISOString()}, false));
+  лента.insertAdjacentHTML('beforeend', сообщениеHTML({автор:'заявитель', текст, время:''}, false));
   лента.scrollTop = лента.scrollHeight;
   const начало = Date.now();
   const таймер = setInterval(() => { ход.textContent = `ассистент смотрит вашу заявку и правила портала… ${Math.round((Date.now() - начало) / 1000)} с`; }, 500);
