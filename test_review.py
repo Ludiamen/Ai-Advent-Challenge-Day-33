@@ -560,6 +560,27 @@ class ТекстРевью(_Репозиторий):
         self.assertEqual(render.метрики_из(текст)["модель"], "ds-flash")
         self.assertIn("logo.png", текст)                  # «не просмотрены»
 
+    def test_цитата_не_из_diff_обезврежена(self) -> None:
+        # Модель «цитирует» описание PR, а не diff: цитата не подтверждена — это текст автора PR,
+        # в код-спане он шёл как есть (check_review часть 6 краснела через раз).
+        from agent.review import render, source
+        с, о = Сборщик.собрать(self, {"баги": [находка(фрагмент="@owner <script>alert(1)</script>")]})
+        self.assertFalse(с.находки[0].подтверждена)
+        в = source.получить(self.git_mcp(), "main", "pr")
+        текст, _ = render.комментарий(в, о, с, {"модель": "m"})
+        self.assertNotIn("@owner", текст)
+        self.assertNotIn("<script>", текст)
+        self.assertIn("❔", текст)
+
+    def test_код_спан_не_закрывается_изнутри(self) -> None:
+        from agent.review import render
+        for текст in ("a `` @owner <b>x</b> `` b", "`x`", "a ``` b", "обычный"):
+            код = render._код(текст)
+            забор = код[:len(код) - len(код.lstrip("`"))]
+            внутри = код[len(забор):len(код) - len(забор)]
+            self.assertNotIn(забор, внутри, код)
+            self.assertEqual(внутри.strip(), текст)
+
     def test_длинный_обрезается(self) -> None:
         from agent.review import render, source
         с, о = Сборщик.собрать(self, {"рекомендации": [находка(серьёзность="мелочь", суть="ж" * 390, фрагмент="")]})
