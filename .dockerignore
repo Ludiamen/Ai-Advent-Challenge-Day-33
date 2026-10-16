@@ -1,0 +1,12 @@
+# Контекст сборки образа поддержки — только то, что нужно сервису (белый список).
+*
+!requirements-support.txt
+!agent/
+!support_app.py
+!support_server.py
+!support-seed.json
+!support/
+!templates/support.html
+!templates/support_desk.html
+!index-support/chunks.json
+**/__pycache__

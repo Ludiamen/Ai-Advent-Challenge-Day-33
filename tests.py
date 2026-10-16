@@ -2993,10 +2993,10 @@ class КонфигурацияMCP(unittest.TestCase):
         """Настоящий mcp-servers.json дня описан верно и секретов в себе не держит."""
         серверы = amcp.load(os.path.join(КОРЕНЬ_ДНЯ, "mcp-servers.json"))
         имена = [с.имя for с in серверы]
-        # День 31: свой сервер git (только чтение) — после agent-state.
+        # День 31: свой сервер git (только чтение) — после agent-state; День 33: support и support-desk.
         self.assertEqual(имена, ["tracker", "tracker-real", "scheduler", "pipeline", "docs",
-                                 "agent-state", "git", "filesystem", "everything", "deepwiki",
-                                 "github"])
+                                 "agent-state", "git", "support", "support-desk", "filesystem", "everything",
+                                 "deepwiki", "github"])
         планировщик = next(с for с in серверы if с.имя == "scheduler")
         # Поля дня 18: «планирует» закрывает обход подтверждения через
         # расписание, «своё» отличает память агента от чужой системы.

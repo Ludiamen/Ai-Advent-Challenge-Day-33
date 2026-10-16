@@ -1,0 +1,21 @@
+# Мини-сервис поддержки (День 33). Запуск на VPS:  docker compose up -d
+# Ключ модели — в .env.support (DEEPSEEK_API_KEY=…), рядом с этим файлом, не в git.
+services:
+  support:
+    image: ai-advent-support:33
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${SUPPORT_PUBLIC_PORT:-8450}:8450"
+    env_file:
+      - .env.support
+    environment:
+      SUPPORT_TLS_HOSTS: "${SUPPORT_TLS_HOSTS:-}"
+    volumes:
+      - support-data:/data
+    mem_limit: 400m
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+volumes:
+  support-data: {}

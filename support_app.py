@@ -249,15 +249,35 @@ def main() -> int:
     разбор.add_argument("--порт", type=int, default=int(os.getenv("SUPPORT_PORT", ПОРТ)))
     разбор.add_argument("--адрес", default=os.getenv("SUPPORT_HOST", "0.0.0.0"))
     разбор.add_argument("--http", action="store_true", help="без TLS (за обратным прокси или для проверок)")
+    разбор.add_argument("--ключ", nargs=2, metavar=("РОЛЬ", "КТО"), default=None,
+                        help="выдать ключ доступа («пользователь u01» или «сотрудник имя») и выйти — для контейнера, "
+                             "где нет cli.py: docker compose exec support python support_app.py --ключ …")
+    разбор.add_argument("--сброс", action="store_true", help="вернуть данные сервис-деска к seed и выйти")
     а = разбор.parse_args()
+    if а.сброс:
+        д = data.Хранилище().сбросить()
+        print(f"данные сброшены: пользователей {len(д['пользователи'])}, тикетов {len(д['тикеты'])}")
+        return 0
+    if а.ключ:
+        роль, кто = а.ключ
+        ключ = access.КлючиПоддержки().создать(роль, кто)
+        print(ключ)
+        print(f"/support{'/desk' if роль == 'сотрудник' else ''}?key={ключ}")
+        return 0
     import uvicorn
     tls: dict[str, Any] = {}
     if not а.http:
         from agent.service import certs
         каталог = os.path.join(os.path.dirname(data.путь_по_умолчанию()), "tls")
         crt, key = os.path.join(каталог, "server.crt"), os.path.join(каталог, "server.key")
-        if not (os.path.exists(crt) and os.path.exists(key)):
-            certs.выпустить(каталог, ["127.0.0.1", certs.адрес_в_сети()], ["localhost"])
+        # Адреса в сертификате: свой, адрес в сети и SUPPORT_TLS_HOSTS (публичный адрес VPS — в
+        # контейнере его не видно). Выпуск — при первом старте или если списка адресов стало больше.
+        доп = [а.strip() for а in os.getenv("SUPPORT_TLS_HOSTS", "").split(",") if а.strip()]
+        адреса = ["127.0.0.1", certs.адрес_в_сети(), *[а for а in доп if а.replace(".", "").isdigit()]]
+        имена = ["localhost", *[а for а in доп if not а.replace(".", "").isdigit()]]
+        san = set(certs.сведения(crt).get("san", [])) if os.path.exists(crt) else set()
+        if not (os.path.exists(crt) and os.path.exists(key)) or not all(any(а in с for с in san) for а in доп):
+            certs.выпустить(каталог, адреса, имена)
         tls = {"ssl_certfile": crt, "ssl_keyfile": key}
     uvicorn.run(создать_приложение(https=not а.http), host=а.адрес, port=а.порт, log_level="warning", **tls)
     return 0

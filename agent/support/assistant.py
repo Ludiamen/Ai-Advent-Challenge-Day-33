@@ -50,10 +50,11 @@ class SupportMCP:
     одним ядром запуск процесса на каждый ответ дороже самого ответа). Сервер закрепляется за
     тикетом на время каждого вызова (`SUPPORT_TICKET`) под общей блокировкой."""
 
-    def __init__(self, тикет: int) -> None:
+    def __init__(self, тикет: int, путь_данных: str = "") -> None:
         import support_server
         self.сервер = support_server.ассистент
         self.тикет = int(тикет)
+        self.путь_данных = путь_данных
         self.вызовы: list[str] = []
 
     def вызвать(self, имя: str, аргументы: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -64,18 +65,22 @@ class SupportMCP:
             async with Client(self.сервер) as клиент:
                 return await клиент.call_tool(имя, аргументы or {})
         self.вызовы.append(имя)
+        # Закрепление за тикетом и файлом данных — переменные окружения сервера; под блокировкой,
+        # чтобы параллельные ответы (два пользователя) не перепутали тикеты и хранилища.
+        закрепить = {"SUPPORT_TICKET": str(self.тикет), **({"SUPPORT_DATA": self.путь_данных} if self.путь_данных else {})}
         with _замок_mcp:
-            прежний = os.environ.get("SUPPORT_TICKET")
-            os.environ["SUPPORT_TICKET"] = str(self.тикет)
+            прежние = {к: os.environ.get(к) for к in закрепить}
+            os.environ.update(закрепить)
             try:
                 р = anyio.run(вызов)
             except Exception as e:  # noqa: BLE001
                 raise ОшибкаMCP(f"{имя}: {type(e).__name__}: {e}") from e
             finally:
-                if прежний is None:
-                    os.environ.pop("SUPPORT_TICKET", None)
-                else:
-                    os.environ["SUPPORT_TICKET"] = прежний
+                for к, в in прежние.items():
+                    if в is None:
+                        os.environ.pop(к, None)
+                    else:
+                        os.environ[к] = в
         текст = "\n".join(getattr(б, "text", "") for б in (р.content or []))
         if р.is_error:
             raise ОшибкаMCP(f"{имя}: {текст[:300]}")
@@ -256,14 +261,15 @@ class Ассистент:
         ответ.стоимость += r.cost
         return r
 
-    def ответить(self, номер: int, этап: Callable[[str, str], None] | None = None) -> ОтветПоддержки:
+    def ответить(self, номер: int, этап: Callable[[str, str], None] | None = None,
+                 путь_данных: str = "") -> ОтветПоддержки:
         ответ = ОтветПоддержки(int(номер))
         старт = time.monotonic()
 
         def отметить(имя: str, подпись: str = "") -> None:
             if этап:
                 этап(имя, подпись)
-        mcp = self.mcp_для(int(номер))
+        mcp = self.mcp_для(int(номер), путь_данных) if путь_данных else self.mcp_для(int(номер))
         # 1–2. Контекст и факты — через MCP.
         отметить("тикет", "MCP: тикет, заявитель, входы, история")
         try:
