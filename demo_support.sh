@@ -16,7 +16,7 @@
 #   bash demo_support.sh                 # показ с записью в demo/
 #   bash demo_support.sh --no-record     # показ без записи
 #   bash demo_support.sh --check         # проверка: режим «поддержка», без подписей и пауз
-#   bash demo_support.sh --url https://93.88.203.91:8450 [--ssh day33-vps]
+#   bash demo_support.sh --url https://<IP-VPS>:8450 [--ssh day33-vps]
 #                                        # то же на развёрнутом сервисе (DEPLOY.md): данные там
 #                                        # сбрасываются к seed, ключи показа выдаются в контейнере
 #                                        # по ssh и отзываются после показа
@@ -80,6 +80,7 @@ if [ -n "$URL" ]; then
   export SUPPORT_KEYS
   START="$URL/support"
   CHROME_EXTRA="--ignore-certificate-errors"     # сертификат своего центра (DEPLOY.md, шаг 4)
+  export SHOW_WHERE="${SHOW_WHERE:-Сервис работает на VPS: 1 vCPU, 1 ГБ, Docker}"
 else
   export MEMORY_DIR="$SCRATCH/memory"
   unset SUPPORT_DATA

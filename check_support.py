@@ -18,7 +18,7 @@
 
     python check_support.py                         # все части (5 — ≈ 10 мин, ≈ $0,2)
     python check_support.py --части 1,2,3,4,6,7,8,9,10
-    python check_support.py --адрес https://93.88.203.91:8450 --части 10
+    python check_support.py --адрес https://<IP-VPS>:8450 --части 10
 """
 
 from __future__ import annotations
