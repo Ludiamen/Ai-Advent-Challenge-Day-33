@@ -7344,6 +7344,7 @@ print("bind-lifecycle-ok")
         self.assertEqual(run_tests.МОДУЛИ, (
             "tests", "test_gateway_validation", "test_service_journal_security", "test_telegram_offset",
             "test_telegram_reliability", "test_telegram_security", "test_devassist", "test_review",
+            "test_support",
         ))
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as ошибка:
             run_tests._аргументы(["--живые"])

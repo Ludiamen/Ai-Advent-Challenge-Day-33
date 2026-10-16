@@ -66,9 +66,9 @@ def _свой(номер: int) -> int:
     return свой
 
 
-def _обернуть(функция, *аргументы: Any) -> Any:
+def _обернуть(функция, *аргументы: Any, **поля: Any) -> Any:
     try:
-        return функция(*аргументы)
+        return функция(*аргументы, **поля)
     except data.ОшибкаДанных as e:
         raise ОшибкаЗапроса(str(e)) from e
 
@@ -135,9 +135,15 @@ def support_policy() -> dict[str, Any]:
 
 @ассистент.tool(title="Ответить в тикет", annotations=ЗАПИСЬ)
 def support_reply(ticket: Номер, text: Annotated[str, Field(description="Текст ответа заявителю.", min_length=1,
-                                                             max_length=4000)]) -> dict[str, Any]:
-    """Сообщение ассистента в тикет."""
-    return _обернуть(хранилище().добавить_сообщение, _свой(ticket), "ассистент", text)
+                                                             max_length=4000)],
+                  sources: Annotated[list[str], Field(description="Подписи источников ответа.", max_length=10)] = [],
+                  facts: Annotated[list[str], Field(description="Ключи фактов тикета, на которые опирается ответ.",
+                                                    max_length=20)] = [],
+                  decision: str = "") -> dict[str, Any]:
+    """Сообщение ассистента в тикет (с источниками и фактами — их видит пользователь и сотрудник)."""
+    return _обернуть(хранилище().добавить_сообщение, _свой(ticket), "ассистент", text,
+                     **{"источники": [str(и)[:200] for и in sources][:10], "факты": [str(ф)[:80] for ф in facts][:20],
+                        **({"решение": decision[:40]} if decision else {})})
 
 
 @ассистент.tool(title="Статус тикета (ИИ)", annotations=ЗАПИСЬ)

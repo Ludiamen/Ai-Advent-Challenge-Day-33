@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Поддержка портала ИТ-отдела</title>
+  <style>
+    :root { --фон:#f4f6f9; --карта:#fff; --текст:#1f2933; --тихо:#6b7280; --линия:#e5e7eb; --акцент:#2563eb;
+            --ии:#eef4ff; --я:#e7f6ec; --жёлтый:#fff7e0; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--фон); color:var(--текст); }
+    header { background:#0f2a4a; color:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    header h1 { font-size:17px; margin:0; font-weight:600; }
+    header .кто { font-size:13px; opacity:.85; }
+    main { display:grid; grid-template-columns:300px 1fr; gap:16px; padding:16px; max-width:1200px; margin:0 auto; }
+    @media (max-width: 800px) { main { grid-template-columns:1fr; padding:10px; } }
+    .панель { background:var(--карта); border:1px solid var(--линия); border-radius:10px; }
+    #тикеты { padding:10px; align-self:start; }
+    #тикеты button.новый { width:100%; padding:9px; border:0; border-radius:8px; background:var(--акцент); color:#fff; font-weight:600; cursor:pointer; }
+    .тикет { padding:9px 10px; border-radius:8px; cursor:pointer; margin-top:6px; border:1px solid transparent; }
+    .тикет:hover { background:#f3f4f6; }
+    .тикет.выбран { border-color:var(--акцент); background:#f0f5ff; }
+    .тикет .тема { font-weight:600; font-size:14px; }
+    .тикет .мета, .мета { color:var(--тихо); font-size:12px; }
+    .статус { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; background:#eef0f3; color:#374151; }
+    .статус.ждёт { background:#fff1c2; } .статус.человек { background:#ffe2e2; } .статус.подтв { background:#e9e3ff; } .статус.решена { background:#d9f2e1; }
+    #разговор { display:flex; flex-direction:column; min-height:70vh; }
+    #шапка { padding:12px 16px; border-bottom:1px solid var(--линия); }
+    #лента { flex:1; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+    .сообщение { max-width:82%; padding:10px 12px; border-radius:12px; white-space:pre-wrap; }
+    .сообщение.заявитель { align-self:flex-end; background:var(--я); }
+    .сообщение.ассистент { align-self:flex-start; background:var(--ии); }
+    .сообщение.исполнитель { align-self:flex-start; background:var(--жёлтый); }
+    .сообщение.система { align-self:center; background:#f3f4f6; font-size:13px; }
+    .сообщение .кто { font-size:12px; color:var(--тихо); margin-bottom:3px; }
+    .опора { margin-top:8px; font-size:12px; color:#374151; white-space:normal; }
+    .опора span { display:inline-block; background:#fff; border:1px solid #d6def0; border-radius:6px; padding:1px 6px; margin:2px 3px 0 0; }
+    .оценка { margin-top:6px; } .оценка button { border:1px solid var(--линия); background:#fff; border-radius:6px; cursor:pointer; padding:1px 8px; }
+    .оценка button.да { background:#e7f6ec; }
+    form { display:flex; gap:8px; padding:12px; border-top:1px solid var(--линия); }
+    textarea { flex:1; resize:vertical; min-height:46px; padding:9px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; }
+    form button { padding:0 18px; border:0; border-radius:8px; background:var(--акцент); color:#fff; font-weight:600; cursor:pointer; }
+    form button:disabled { opacity:.5; }
+    #ход { padding:0 16px 8px; color:var(--тихо); font-size:13px; min-height:20px; }
+    .ошибка { color:#b91c1c; }
+    .пусто { color:var(--тихо); padding:30px; text-align:center; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Поддержка портала ИТ-отдела</h1>
+  <div class="кто" id="кто">…</div>
+</header>
+<main>
+  <section class="панель" id="тикеты">
+    <button class="новый" id="новый">+ Новое обращение</button>
+    <div id="список"></div>
+  </section>
+  <section class="панель" id="разговор">
+    <div id="шапка"><b>Новое обращение</b><div class="мета">Опишите проблему — ассистент ответит сразу, по правилам портала и данным вашей учётной записи. Действия с учётной записью выполняет сотрудник поддержки.</div></div>
+    <div id="лента"><div class="пусто">Например: «Почему не работает авторизация?»</div></div>
+    <div id="ход"></div>
+    <form id="форма">
+      <textarea id="текст" placeholder="Ваш вопрос…" maxlength="4000" required></textarea>
+      <button id="отправить" type="submit">Отправить</button>
+    </form>
+  </section>
+</main>
+<script>
+const э = (т) => String(т ?? '').replace(/[&<>"']/g, с => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[с]));
+const КЛАСС = {'Ждёт ответа заявителя':'ждёт','Передан специалисту':'человек','Ждёт подтверждения действия':'подтв','Решена':'решена','В работе':'человек'};
+const КТО = {'заявитель':'Вы','ассистент':'Ассистент поддержки (ИИ)','исполнитель':'Сотрудник поддержки','система':'Система'};
+let текущий = null;
+
+async function api(путь, тело) {
+  const о = await fetch(путь, тело ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(тело)} : {});
+  if (!о.ok) { const д = await о.json().catch(() => ({})); throw new Error(д.detail || о.statusText); }
+  return о.json();
+}
+
+function статус(с) { return `<span class="статус ${КЛАСС[с] || ''}">${э(с)}</span>`; }
+
+async function загрузить() {
+  const д = await api('/api/support/me');
+  document.getElementById('кто').textContent = `${д.пользователь.имя} · ${д.пользователь.подразделение}`;
+  document.getElementById('список').innerHTML = д.тикеты.map(т =>
+    `<div class="тикет ${т.номер === текущий ? 'выбран' : ''}" data-номер="${т.номер}"><div class="тема">#${т.номер} ${э(т.тема)}</div>
+     <div class="мета">${статус(т.статус)} ${э((т.создана || '').replace('T', ' ').slice(0, 16))}</div></div>`).join('') ||
+    '<div class="мета" style="padding:8px">Обращений пока нет.</div>';
+  document.querySelectorAll('.тикет').forEach(у => у.onclick = () => открыть(Number(у.dataset.номер)));
+}
+
+function сообщениеHTML(с, последнийИИ) {
+  const опора = (с.источники && с.источники.length) || (с.факты && с.факты.length)
+    ? `<div class="опора">${(с.источники || []).map(и => `<span title="источник">📄 ${э(и)}</span>`).join('')}${
+        (с.факты || []).length ? `<span title="факты тикета">🔎 по данным: ${э(с.факты.length)} фактов вашей заявки</span>` : ''}</div>` : '';
+  const оценка = с.автор === 'ассистент' && последнийИИ
+    ? `<div class="оценка">Ответ помог? <button data-о="1" class="${с.оценка === 1 ? 'да' : ''}">👍</button> <button data-о="-1" class="${с.оценка === -1 ? 'да' : ''}">👎</button></div>` : '';
+  return `<div class="сообщение ${э(с.автор)}" data-автор="${э(с.автор)}"><div class="кто">${э(КТО[с.автор] || с.автор)} · ${э((с.время || '').replace('T', ' ').slice(0, 16))}</div>${э(с.текст)}${опора}${оценка}</div>`;
+}
+
+async function открыть(номер) {
+  текущий = номер;
+  const т = await api(`/api/support/tickets/${номер}`);
+  document.getElementById('шапка').innerHTML = `<b>#${т.номер} ${э(т.тема)}</b> ${статус(т.статус)}<div class="мета">${э(т.категория || '')}</div>`;
+  const последний = т.сообщения.map(с => с.автор).lastIndexOf('ассистент');
+  document.getElementById('лента').innerHTML = т.сообщения.map((с, i) => сообщениеHTML(с, i === последний)).join('');
+  document.querySelectorAll('.оценка button').forEach(к => к.onclick = async () => { await api(`/api/support/tickets/${номер}/rate`, {score: Number(к.dataset.о)}); открыть(номер); });
+  const лента = document.getElementById('лента'); лента.scrollTop = лента.scrollHeight;
+  загрузить();
+}
+
+document.getElementById('новый').onclick = () => {
+  текущий = null;
+  document.getElementById('шапка').innerHTML = '<b>Новое обращение</b><div class="мета">Опишите проблему — ассистент ответит сразу.</div>';
+  document.getElementById('лента').innerHTML = '<div class="пусто">Например: «Почему не работает авторизация?»</div>';
+  загрузить();
+};
+
+document.getElementById('форма').onsubmit = async (е) => {
+  е.preventDefault();
+  const поле = document.getElementById('текст'), кнопка = document.getElementById('отправить'), ход = document.getElementById('ход');
+  const текст = поле.value.trim(); if (!текст) return;
+  кнопка.disabled = true;
+  const лента = document.getElementById('лента');
+  if (!текущий) лента.innerHTML = '';
+  лента.insertAdjacentHTML('beforeend', сообщениеHTML({автор:'заявитель', текст, время:new Date().toISOString()}, false));
+  лента.scrollTop = лента.scrollHeight;
+  const начало = Date.now();
+  const таймер = setInterval(() => { ход.textContent = `ассистент смотрит вашу заявку и правила портала… ${Math.round((Date.now() - начало) / 1000)} с`; }, 500);
+  try {
+    const р = await api('/api/support/messages', {text: текст, ticket: текущий});
+    поле.value = '';
+    ход.textContent = р.ждёт_человека ? 'заявка у сотрудника поддержки — ответ придёт сюда' : '';
+    await открыть(р.тикет.номер);
+  } catch (ошибка) {
+    ход.innerHTML = `<span class="ошибка">${э(ошибка.message)}</span>`;
+  } finally { clearInterval(таймер); кнопка.disabled = false; }
+};
+
+загрузить().catch(e => { document.getElementById('лента').innerHTML = `<div class="пусто ошибка">${э(e.message)} — откройте ссылку доступа ещё раз.</div>`; });
+</script>
+</body>
+</html>

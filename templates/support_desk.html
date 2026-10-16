@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Пульт поддержки</title>
+  <style>
+    :root { --фон:#f4f6f9; --карта:#fff; --текст:#1f2933; --тихо:#6b7280; --линия:#e5e7eb; --акцент:#2563eb; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--фон); color:var(--текст); }
+    header { background:#3b1f4a; color:#fff; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    header h1 { font-size:16px; margin:0; }
+    #метрики { font-size:12px; opacity:.9; }
+    main { display:grid; grid-template-columns:340px 1fr; gap:14px; padding:14px; max-width:1400px; margin:0 auto; }
+    @media (max-width: 900px) { main { grid-template-columns:1fr; } }
+    .панель { background:var(--карта); border:1px solid var(--линия); border-radius:10px; padding:10px; }
+    .строка { padding:8px; border-radius:8px; cursor:pointer; border:1px solid transparent; margin-bottom:4px; }
+    .строка:hover { background:#f3f4f6; } .строка.выбран { border-color:#7c3aed; background:#f5f0ff; }
+    .тема { font-weight:600; }
+    .мета { color:var(--тихо); font-size:12px; }
+    .метка { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px; background:#eef0f3; margin-right:4px; }
+    .метка.заявка { background:#e9e3ff; color:#4c1d95; font-weight:600; }
+    .метка.человек { background:#ffe2e2; }
+    .сетка { display:grid; grid-template-columns:1fr 320px; gap:12px; }
+    @media (max-width: 1100px) { .сетка { grid-template-columns:1fr; } }
+    .сообщение { padding:8px 10px; border-radius:10px; margin-bottom:8px; white-space:pre-wrap; }
+    .заявитель { background:#e7f6ec; } .ассистент { background:#eef4ff; } .исполнитель { background:#fff7e0; } .система { background:#f3f4f6; }
+    .кто { font-size:12px; color:var(--тихо); }
+    .опора { font-size:12px; margin-top:4px; color:#374151; white-space:normal; }
+    table { border-collapse:collapse; width:100%; font-size:12px; } td { border-top:1px solid var(--линия); padding:3px 4px; vertical-align:top; }
+    .заявка-карта { border:2px solid #7c3aed; border-radius:10px; padding:10px; margin-bottom:10px; background:#faf7ff; }
+    button { padding:6px 12px; border:0; border-radius:7px; cursor:pointer; font-weight:600; margin:3px 4px 3px 0; }
+    .да { background:#16a34a; color:#fff; } .нет { background:#dc2626; color:#fff; } .обычн { background:#e5e7eb; } .синий { background:var(--акцент); color:#fff; }
+    textarea { width:100%; min-height:60px; padding:8px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; }
+    h3 { margin:6px 0; font-size:14px; }
+    .ошибка { color:#b91c1c; }
+  </style>
+</head>
+<body>
+<header><h1>Пульт поддержки · портал ИТ-отдела</h1><div id="метрики">…</div></header>
+<main>
+  <section class="панель"><h3>Очередь</h3><div id="очередь"></div></section>
+  <section class="панель" id="карточка"><div class="мета">Выберите тикет в очереди.</div></section>
+</main>
+<script>
+const э = (т) => String(т ?? '').replace(/[&<>"']/g, с => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[с]));
+const ДЕЙСТВИЯ = {'разблокировать':'Снять блокировку входа','сбросить_второй_фактор':'Сбросить второй фактор','новые_резервные_коды':'Выпустить новые резервные коды',
+                  'новое_приглашение':'Отправить приглашение заново','ссылка_пароля':'Выслать ссылку восстановления пароля','закрыть_сессии':'Закрыть сессии на всех устройствах'};
+let текущий = null;
+async function api(путь, тело) {
+  const о = await fetch(путь, тело !== undefined ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(тело || {})} : {});
+  if (!о.ok) { const д = await о.json().catch(() => ({})); throw new Error(д.detail || о.statusText); }
+  return о.json();
+}
+async function метрики() {
+  const м = await api('/api/desk/metrics');
+  document.getElementById('метрики').textContent = `ответов ИИ ${м.ответов} · сам ИИ ${Math.round(м.сам_ИИ * 100)}% · передано человеку ${Math.round(м.передано_человеку * 100)}% · заявок выполнено ${м.заявок_выполнено}/отклонено ${м.заявок_отклонено} · p50 ${м.p50_с} с · 👍 ${м.доля_👍 === null ? '—' : Math.round(м.доля_👍 * 100) + '%'}`;
+}
+async function очередь() {
+  const д = await api('/api/desk/queue');
+  document.getElementById('очередь').innerHTML = д.тикеты.map(т => `<div class="строка ${т.номер === текущий ? 'выбран' : ''}" data-н="${т.номер}">
+    <div class="тема">#${т.номер} ${э(т.тема)}</div>
+    <div class="мета">${т.заявка ? '<span class="метка заявка">заявка ИИ</span>' : ''}<span class="метка ${['Передан специалисту','В работе'].includes(т.статус) ? 'человек' : ''}">${э(т.статус)}</span>
+    ${э(т.заявитель)} · ${э(т.категория)}</div></div>`).join('');
+  document.querySelectorAll('.строка').forEach(у => у.onclick = () => открыть(Number(у.dataset.н)));
+  метрики().catch(() => {});
+}
+function учётка(п) {
+  const у = п.учётная_запись;
+  if (!у) return `<div class="мета">${э(п.примечание || 'без учётной записи портала')}</div>`;
+  const строки = [['статус', у.статус], ['блокировка', у.блокировка ? `с ${у.блокировка.с.slice(11,16)} до ${у.блокировка.до.slice(11,16)}, ${у.блокировка.неудачных_подряд} × ${у.блокировка.причина}` : 'нет'],
+                  ['второй фактор', у.второй_фактор], ['резервных кодов', у.резервных_кодов], ['пароль сменён', у.пароль_сменён || '—'],
+                  ['срок пароля истёк', у.срок_пароля_истёк ? 'да' : 'нет']];
+  if (у.приглашение) строки.push(['приглашение до', (у.приглашение.действует_до || '').replace('T', ' ').slice(0, 16)]);
+  if (у.примечание) строки.push(['примечание', у.примечание]);
+  return `<table>${строки.map(([к, в]) => `<tr><td>${э(к)}</td><td><b>${э(в)}</b></td></tr>`).join('')}</table>`;
+}
+async function открыть(н) {
+  текущий = н;
+  const к = await api(`/api/desk/tickets/${н}`), т = к.тикет, п = к.заявитель;
+  const ждут = к.заявки.filter(з => з.статус === 'ждёт подтверждения');
+  document.getElementById('карточка').innerHTML = `
+    <h3>#${т.номер} ${э(т.тема)} <span class="метка">${э(т.статус)}</span></h3>
+    <div class="мета">${э(т.категория)} · ${э(т.критичность)} · создана ${э((т.создана || '').replace('T', ' ').slice(0, 16))}</div>
+    ${ждут.map(з => `<div class="заявка-карта" data-заявка="${э(з.id)}"><b>Заявка ИИ ${э(з.id)}: ${э(ДЕЙСТВИЯ[з.вид] || з.вид)}</b>
+       <div class="мета">Причина: ${э(з.причина)}</div><div class="мета">Проверьте данные учётной записи справа и, если нужно, личность заявителя.</div>
+       <button class="да" data-подтвердить="${э(з.id)}">Подтвердить</button><button class="нет" data-отклонить="${э(з.id)}">Отклонить</button></div>`).join('')}
+    <div class="сетка"><div>
+      ${т.сообщения.map(с => `<div class="сообщение ${э(с.автор)}"><div class="кто">${э(с.автор)} · ${э((с.время || '').replace('T', ' ').slice(0, 16))}${с.решение ? ' · решение: ' + э(с.решение) : ''}${с.оценка ? ' · оценка ' + (с.оценка > 0 ? '👍' : '👎') : ''}</div>${э(с.текст)}
+        ${(с.источники || []).length ? `<div class="опора">📄 ${с.источники.map(э).join(' · ')}</div>` : ''}${(с.факты || []).length ? `<div class="опора">🔎 ${с.факты.map(э).join(', ')}</div>` : ''}</div>`).join('')}
+      <textarea id="ответ" placeholder="Ответ заявителю…"></textarea>
+      <button class="синий" id="отв">Ответить</button><button class="обычн" id="взять">Взять в работу</button><button class="обычн" id="ии">Вернуть ИИ</button>
+      <button class="обычн" id="закрыть">Закрыть с решением</button><div id="итог" class="мета"></div>
+    </div><div>
+      <h3>Заявитель</h3><div><b>${э(п.имя)}</b><div class="мета">${э(п.роль)} · ${э(п.подразделение)}</div></div>${учётка(п)}
+      ${к.входы.length ? `<h3>Журнал входов</h3><table>${к.входы.map(в => `<tr><td>${э(в.время.replace('T', ' ').slice(5, 16))}</td><td>${э(в.итог)}</td></tr>`).join('')}</table>` : ''}
+      ${к.история.length ? `<h3>Прошлые тикеты</h3>${к.история.map(х => `<div class="мета">#${х.номер} ${э(х.тема)} — ${э(х.статус)}</div>`).join('')}` : ''}
+    </div></div>`;
+  const итог = (т) => { document.getElementById('итог').innerHTML = т; };
+  const делать = async (путь, тело) => { try { await api(путь, тело); await открыть(н); await очередь(); } catch (е) { итог(`<span class="ошибка">${э(е.message)}</span>`); } };
+  document.querySelectorAll('[data-подтвердить]').forEach(к_ => к_.onclick = () => делать(`/api/desk/requests/${к_.dataset.подтвердить}/apply`, {}));
+  document.querySelectorAll('[data-отклонить]').forEach(к_ => к_.onclick = () => { const п_ = prompt('Причина отказа'); if (п_) делать(`/api/desk/requests/${к_.dataset.отклонить}/reject`, {reason: п_}); });
+  document.getElementById('отв').onclick = () => делать(`/api/desk/tickets/${н}/reply`, {text: document.getElementById('ответ').value});
+  document.getElementById('взять').onclick = () => делать(`/api/desk/tickets/${н}/take`, {});
+  document.getElementById('ии').onclick = () => { итог('ИИ отвечает…'); делать(`/api/desk/tickets/${н}/return-ai`, {}); };
+  document.getElementById('закрыть').onclick = () => { const р = prompt('Решение'); if (р) делать(`/api/desk/tickets/${н}/close`, {resolution: р}); };
+  очередь();
+}
+очередь().catch(е => { document.getElementById('очередь').innerHTML = `<div class="ошибка">${э(е.message)} — откройте ссылку доступа ещё раз.</div>`; });
+setInterval(() => очередь().catch(() => {}), 15000);
+</script>
+</body>
+</html>
